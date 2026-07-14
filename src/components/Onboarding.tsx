@@ -10,7 +10,7 @@ const ROLE_OPTIONS: Array<{ role: Persona; title: string; sub: string; body: str
   { role: 'L2', title: 'GM / Head / Advisor', sub: 'L2 · Subfunction leader', body: 'Plans the transformation for one subfunction.', icon: Landmark },
   { role: 'L3', title: 'Controller / Dept. head', sub: 'L3 · Unit manager', body: 'Manages people and tracks documentation completion.', icon: Users },
   { role: 'L4', title: 'Executive / Coordinator', sub: 'L4 · Process executor', body: 'Documents day-to-day working processes in detail.', icon: Wrench },
-  { role: 'Admin', title: 'Programme admin', sub: 'Project Vanguard lead', body: 'Runs the programme: data quality, hackathon list, next stage.', icon: ShieldCheck },
+  { role: 'Admin', title: 'Super admin', sub: 'Programme owner', body: 'Owns Blueprint — users, data quality, broadcasts, readiness. No process capture.', icon: ShieldCheck },
 ];
 
 const slide = {

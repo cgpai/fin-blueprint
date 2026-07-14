@@ -45,6 +45,13 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
+/** Admin / super-admin runs the programme — never the staff capture journey. */
+function homeForRole(role: Persona, savedPhase?: string | null): { phase: AppPhase; tab: string } {
+  if (role === 'Admin') return { phase: 'workspace', tab: 'admin' };
+  if (savedPhase === 'workspace') return { phase: 'workspace', tab: role === 'L4' ? 'catalogue' : 'dashboard' };
+  return { phase: 'journey', tab: 'dashboard' };
+}
+
 export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(() => loadJSON<UserProfile | null>(STORAGE.profile, null));
 
@@ -52,12 +59,14 @@ export default function App() {
     const saved = loadJSON<UserProfile | null>(STORAGE.profile, null);
     if (!saved) return 'landing';
     if (sessionStorage.getItem(STORAGE.unlocked) !== 'true') return 'locked';
-    const savedPhase = localStorage.getItem(STORAGE.phase);
-    return savedPhase === 'journey' || savedPhase === 'workspace' ? savedPhase : 'journey';
+    return homeForRole(saved.role, localStorage.getItem(STORAGE.phase)).phase;
   });
 
   // Which workspace tab to open when entering the workspace (recap choices route here)
-  const [workspaceTab, setWorkspaceTab] = useState<string>('dashboard');
+  const [workspaceTab, setWorkspaceTab] = useState<string>(() => {
+    const saved = loadJSON<UserProfile | null>(STORAGE.profile, null);
+    return saved?.role === 'Admin' ? 'admin' : 'dashboard';
+  });
   const [focusProcessId, setFocusProcessId] = useState<string | null>(null);
 
   const [currentPersona, setCurrentPersona] = useState<Persona>(() => loadJSON<UserProfile | null>(STORAGE.profile, null)?.role ?? 'L4');
@@ -77,9 +86,20 @@ export default function App() {
       .then((remote) => {
         if (!remote) return;
         const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
-        if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
-        if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
-        else if (remotePhase && profile) setPhase(remotePhase);
+        if (profile?.role === 'Admin') {
+          localStorage.setItem(STORAGE.phase, 'workspace');
+          if (sessionStorage.getItem(STORAGE.unlocked) === 'true') {
+            setWorkspaceTab('admin');
+            setPhase('workspace');
+          } else {
+            setPhase('locked');
+          }
+        } else if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') {
+          setPhase('locked');
+        } else if (remotePhase && profile) {
+          localStorage.setItem(STORAGE.phase, remotePhase);
+          setPhase(remotePhase);
+        }
         if (Array.isArray(remote.processes)) setProcesses(remote.processes);
         if (Array.isArray(remote.systems)) setAvailableSystems(remote.systems);
         if (Array.isArray(remote.notifications)) setNotifications(remote.notifications);
@@ -106,6 +126,13 @@ export default function App() {
   }, [phase]);
 
   useEffect(() => {
+    if (profile?.role === 'Admin' && phase === 'journey') {
+      setWorkspaceTab('admin');
+      setPhase('workspace');
+    }
+  }, [profile, phase]);
+
+  useEffect(() => {
     if (!spreadsheetEnabled || !remoteReady) return;
     const persistedPhase = phase === 'journey' || phase === 'workspace' ? phase : localStorage.getItem(STORAGE.phase);
     const snapshot: AppSnapshot = {
@@ -130,25 +157,27 @@ export default function App() {
   }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady]);
 
   // ---------- Phase transitions ----------
-  const handleOnboardingComplete = (newProfile: UserProfile) => {
-    localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
+  const enterApp = (nextProfile: UserProfile) => {
+    const home = homeForRole(nextProfile.role, localStorage.getItem(STORAGE.phase));
+    localStorage.setItem(STORAGE.profile, JSON.stringify(nextProfile));
+    localStorage.setItem(STORAGE.phase, home.phase);
     sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(newProfile);
+    setProfile(nextProfile);
+    setCurrentPersona(nextProfile.role);
+    setWorkspaceTab(home.tab);
+    setPhase(home.phase);
+  };
+
+  const handleOnboardingComplete = (newProfile: UserProfile) => {
     setRegisteredProfiles((prev) => {
       const key = (newProfile.email || newProfile.name).trim().toLowerCase();
       return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), newProfile];
     });
-    setCurrentPersona(newProfile.role);
-    setPhase('journey');
+    enterApp(newProfile);
   };
 
   const handleExistingLogin = (existingProfile: UserProfile) => {
-    localStorage.setItem(STORAGE.profile, JSON.stringify(existingProfile));
-    sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(existingProfile);
-    setCurrentPersona(existingProfile.role);
-    const savedPhase = localStorage.getItem(STORAGE.phase);
-    setPhase(savedPhase === 'workspace' ? 'workspace' : 'journey');
+    enterApp(existingProfile);
   };
 
   const handleUpdateRegisteredProfile = (updatedProfile: UserProfile) => {
@@ -163,9 +192,8 @@ export default function App() {
   };
 
   const handleUnlock = () => {
-    sessionStorage.setItem(STORAGE.unlocked, 'true');
-    const savedPhase = localStorage.getItem(STORAGE.phase);
-    setPhase(savedPhase === 'workspace' ? 'workspace' : 'journey');
+    if (!profile) return;
+    enterApp(profile);
   };
 
   const handleStartOver = () => {
@@ -283,7 +311,7 @@ export default function App() {
     return <LockScreen profile={profile} onUnlock={handleUnlock} onStartOver={handleStartOver} />;
   }
 
-  if (phase === 'journey' && profile) {
+  if (phase === 'journey' && profile && profile.role !== 'Admin') {
     return (
       <CaptureJourney
         profile={profile}
@@ -297,7 +325,7 @@ export default function App() {
           setPhase('workspace');
         }}
         onSkipToWorkspace={() => {
-          setWorkspaceTab(currentPersona === 'Admin' ? 'admin' : 'dashboard');
+          setWorkspaceTab('dashboard');
           setPhase('workspace');
         }}
       />

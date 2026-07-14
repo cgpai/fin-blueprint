@@ -31,7 +31,7 @@ const PERSONA_LABELS: Record<Persona, string> = {
   L2: 'GM / Head',
   L3: 'Manager',
   L4: 'Executor',
-  Admin: 'Admin',
+  Admin: 'Super admin',
 };
 
 export default function Sidebar({
