@@ -133,9 +133,9 @@ export default function Workspace({
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden canvas-wash">
+    <div className="flex flex-col md:flex-row h-dvh w-full overflow-hidden canvas-wash">
       {loggingOut && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 backdrop-blur-md px-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
             animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
@@ -165,16 +165,16 @@ export default function Workspace({
         onLock={handleLogout}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 order-first md:order-none">
         {/* Header */}
-        <header className="app-header px-6 md:px-10 pt-7 pb-2 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-display text-3xl md:text-4xl font-light tracking-tight">
+        <header className="app-header px-4 sm:px-6 md:px-10 pt-5 sm:pt-7 pb-2 flex items-start sm:items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-light tracking-tight truncate">
               {greeting()}, <span className="font-semibold">{profile.name.split(' ')[0]}!</span>
             </h1>
-            <p className="text-sm text-mute mt-1">Let&rsquo;s make the way you work visible.</p>
+            <p className="text-xs sm:text-sm text-mute mt-1 hidden sm:block">Let&rsquo;s make the way you work visible.</p>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2 sm:gap-5 shrink-0">
             <div className="text-right hidden sm:block">
               <div className="text-[11px] font-semibold text-mute">Processes documented</div>
               <div className="font-display text-2xl font-semibold leading-tight">
@@ -187,17 +187,18 @@ export default function Workspace({
               <div className="font-display text-2xl font-semibold leading-tight">{avgCompleteness}%</div>
             </div>
             {currentPersona !== 'Admin' && (
-              <button onClick={onCaptureNew} className="btn-dark">
-                <Plus size={16} /> Capture process
+              <button onClick={onCaptureNew} className="btn-dark !px-3 !py-2.5 sm:!px-5" aria-label="Capture process">
+                <Plus size={16} />
+                <span className="hidden sm:inline">Capture process</span>
               </button>
             )}
-            <Avatar name={profile.name} size={42} />
+            <Avatar name={profile.name} size={36} />
           </div>
         </header>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto px-6 md:px-10 py-6">
-          <div className="max-w-6xl mx-auto space-y-6 pb-10">
+        {/* Main content — bottom pad clears fixed mobile nav */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-10 py-4 sm:py-6">
+          <div className="max-w-6xl mx-auto space-y-6 pb-24 md:pb-10">
             {currentTab === 'dashboard' &&
               (currentPersona === 'L3' ? (
                 <DashboardManager

@@ -135,8 +135,8 @@ export default function AdminPanel({
         {registeredUsers.length === 0 ? (
           <p className="text-sm text-faint mt-3">No registered users synced yet.</p>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="mt-4 overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-sm min-w-[520px]">
               <thead className="text-left text-[11px] uppercase text-faint">
                 <tr>
                   <th className="py-2 pr-4">Name</th>

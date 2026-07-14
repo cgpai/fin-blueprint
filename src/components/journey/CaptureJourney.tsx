@@ -221,11 +221,11 @@ export default function CaptureJourney({
     <div className="min-h-full canvas-wash overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
         {/* Progress rail */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="glass rounded-full px-4 py-2 flex items-center gap-1 sm:gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+          <div className="glass rounded-full px-3 sm:px-4 py-2 flex items-center gap-0.5 sm:gap-2 overflow-x-auto max-w-full">
             {STAGE_RAIL.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-1 sm:gap-2">
-                {i > 0 && <span className={`w-4 sm:w-6 h-px ${i <= currentIndex ? 'bg-ink' : 'bg-line'}`} />}
+              <div key={s.id} className="flex items-center gap-0.5 sm:gap-2 shrink-0">
+                {i > 0 && <span className={`w-3 sm:w-6 h-px ${i <= currentIndex ? 'bg-ink' : 'bg-line'}`} />}
                 <span
                   className={`flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2 py-1 transition-colors ${
                     i === currentIndex ? 'bg-ink text-white' : i < currentIndex ? 'text-citron-deep' : 'text-faint'
@@ -237,7 +237,7 @@ export default function CaptureJourney({
               </div>
             ))}
           </div>
-          <button onClick={onSkipToWorkspace} className="text-xs font-medium text-mute hover:text-ink transition-colors cursor-pointer whitespace-nowrap ml-3">
+          <button onClick={onSkipToWorkspace} className="text-xs font-medium text-mute hover:text-ink transition-colors cursor-pointer whitespace-nowrap">
             Skip for now →
           </button>
         </div>

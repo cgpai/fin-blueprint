@@ -324,7 +324,26 @@ function doPost(e) {
     if (body.action === 'resetState') {
       clearKnownSheets_();
       sheet_();
-      return json_({ ok: true, reset: true });
+      // Keep mirror tab headers; optionally seed an admin profile.
+      const seedProfile = body.seed && body.seed.profile && typeof body.seed.profile === 'object' ? body.seed.profile : null;
+      const profiles = {};
+      if (seedProfile) {
+        const key = profileKey_(seedProfile);
+        if (key) profiles[key] = seedProfile;
+      }
+      const clean = {
+        profiles,
+        profile: seedProfile,
+        phase: null,
+        processes: [],
+        systems: [],
+        notifications: [],
+        adminBroadcastLogs: [],
+        improvementItems: [],
+      };
+      writeState_(clean);
+      writeFlatTables_(clean);
+      return json_({ ok: true, reset: true, profiles: Object.keys(profiles).length });
     }
     if (body.action !== 'saveState') return json_({ ok: false, error: 'Unknown action' });
     if (!body.snapshot || typeof body.snapshot !== 'object' || Array.isArray(body.snapshot)) {

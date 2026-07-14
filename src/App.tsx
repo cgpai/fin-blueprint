@@ -28,10 +28,13 @@ import { AppSnapshot, loadSnapshot, saveSnapshot, spreadsheetEnabled } from './l
 const STORAGE = {
   profile: 'bp_profile',
   phase: 'bp_phase',
-  processes: 'bp_processes',
-  systems: 'bp_systems',
+  // v3: drop cached mock demo rows so Sheets reset is not re-uploaded from localStorage
+  processes: 'bp_processes_v3',
+  systems: 'bp_systems_v3',
   unlocked: 'bp_unlocked', // sessionStorage — cleared when the browser tab closes
 } as const;
+
+const emptyWhenSheets = <T,>(fallback: T): T => (spreadsheetEnabled ? ([] as unknown as T) : fallback);
 
 function loadJSON<T>(key: string, fallback: T): T {
   try {
@@ -59,12 +62,12 @@ export default function App() {
 
   const [currentPersona, setCurrentPersona] = useState<Persona>(() => loadJSON<UserProfile | null>(STORAGE.profile, null)?.role ?? 'L4');
 
-  // ---------- Data layer (local-first, mock-seeded) ----------
-  const [processes, setProcesses] = useState<Process[]>(() => loadJSON(STORAGE.processes, MOCK_PROCESSES));
-  const [availableSystems, setAvailableSystems] = useState<SystemItem[]>(() => loadJSON(STORAGE.systems, MOCK_SYSTEMS));
-  const [notifications, setNotifications] = useState<UserNotification[]>(MOCK_NOTIFICATIONS);
-  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(MOCK_NOTIFICATION_LOGS);
-  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(MOCK_IMPROVEMENT_ITEMS);
+  // ---------- Data layer (Sheets = source of truth in prod; mocks only for local-only) ----------
+  const [processes, setProcesses] = useState<Process[]>(() => loadJSON(STORAGE.processes, emptyWhenSheets(MOCK_PROCESSES)));
+  const [availableSystems, setAvailableSystems] = useState<SystemItem[]>(() => loadJSON(STORAGE.systems, emptyWhenSheets(MOCK_SYSTEMS)));
+  const [notifications, setNotifications] = useState<UserNotification[]>(() => emptyWhenSheets(MOCK_NOTIFICATIONS));
+  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(() => emptyWhenSheets(MOCK_NOTIFICATION_LOGS));
+  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => emptyWhenSheets(MOCK_IMPROVEMENT_ITEMS));
   const [registeredProfiles, setRegisteredProfiles] = useState<UserProfile[]>([]);
   const [remoteReady, setRemoteReady] = useState(!spreadsheetEnabled);
 
@@ -77,11 +80,11 @@ export default function App() {
         if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
         if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
         else if (remotePhase && profile) setPhase(remotePhase);
-        if (remote.processes) setProcesses(remote.processes);
-        if (remote.systems) setAvailableSystems(remote.systems);
-        if (remote.notifications) setNotifications(remote.notifications);
-        if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
-        if (remote.improvementItems) setImprovementItems(remote.improvementItems);
+        if (Array.isArray(remote.processes)) setProcesses(remote.processes);
+        if (Array.isArray(remote.systems)) setAvailableSystems(remote.systems);
+        if (Array.isArray(remote.notifications)) setNotifications(remote.notifications);
+        if (Array.isArray(remote.adminBroadcastLogs)) setAdminBroadcastLogs(remote.adminBroadcastLogs);
+        if (Array.isArray(remote.improvementItems)) setImprovementItems(remote.improvementItems);
         if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
       })
       .catch((err) => console.error('Spreadsheet sync load failed:', err))
@@ -265,6 +268,7 @@ export default function App() {
       <LandingPage
         onStart={() => setPhase('onboarding')}
         registeredProfiles={registeredProfiles}
+        profilesLoading={spreadsheetEnabled && !remoteReady}
         onLogin={handleExistingLogin}
         onUpdateProfile={handleUpdateRegisteredProfile}
       />
@@ -335,6 +339,7 @@ export default function App() {
     <LandingPage
       onStart={() => setPhase('onboarding')}
       registeredProfiles={registeredProfiles}
+      profilesLoading={spreadsheetEnabled && !remoteReady}
       onLogin={handleExistingLogin}
       onUpdateProfile={handleUpdateRegisteredProfile}
     />

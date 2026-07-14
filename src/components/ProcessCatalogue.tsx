@@ -262,22 +262,22 @@ export default function ProcessCatalogue({
 
       {/* Pill filters */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
-            className="field !rounded-full !py-2 !pl-9 !pr-4 !w-60 text-sm"
+            className="field !rounded-full !py-2 !pl-9 !pr-4 w-full sm:!w-60 text-sm"
             placeholder="Search title, owner, steps…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <select className="field !rounded-full !py-2 !px-4 !w-auto text-sm cursor-pointer" value={subFunction} onChange={(e) => setSubFunction(e.target.value)}>
+        <select className="field !rounded-full !py-2 !px-4 !w-full sm:!w-auto text-sm cursor-pointer" value={subFunction} onChange={(e) => setSubFunction(e.target.value)}>
           <option value="">All lines of work</option>
           {SUBFUNCTIONS_LIST.map((sf) => (
             <option key={sf} value={sf}>{sf}</option>
           ))}
         </select>
-        <select className="field !rounded-full !py-2 !px-4 !w-auto text-sm cursor-pointer" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select className="field !rounded-full !py-2 !px-4 !w-full sm:!w-auto text-sm cursor-pointer" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Any status</option>
           {['Draft', 'Submitted', 'Refined', 'Approved'].map((s) => (
             <option key={s} value={s}>{s}</option>

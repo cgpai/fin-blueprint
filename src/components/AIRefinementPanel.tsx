@@ -117,7 +117,7 @@ export default function AIRefinementPanel({
 
       {/* Picker */}
       <div className="card p-5 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-56">
+        <div className="flex-1 min-w-0 w-full sm:min-w-56">
           <label className="label" htmlFor="ref-proc">Process to analyse</label>
           <select
             id="ref-proc"

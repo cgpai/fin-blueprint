@@ -56,11 +56,13 @@ const CAPABILITIES = [
 export default function LandingPage({
   onStart,
   registeredProfiles,
+  profilesLoading = false,
   onLogin,
   onUpdateProfile,
 }: {
   onStart: () => void;
   registeredProfiles: UserProfile[];
+  profilesLoading?: boolean;
   onLogin: (profile: UserProfile) => void;
   onUpdateProfile: (profile: UserProfile) => void;
 }) {
@@ -84,8 +86,8 @@ export default function LandingPage({
   };
 
   const continueToPassword = () => {
-    if (registeredProfiles.length === 0) {
-      setError('User list is still loading. Try again in a moment.');
+    if (profilesLoading || registeredProfiles.length === 0) {
+      setError(profilesLoading ? 'User list is still loading. Try again in a moment.' : 'No registered users yet.');
       return;
     }
     const found = registeredProfiles.some((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
@@ -129,22 +131,22 @@ export default function LandingPage({
     <div className="min-h-full sky-wash overflow-y-auto">
       {/* Floating pill nav */}
       <nav className="sticky top-4 z-20 mx-auto max-w-3xl px-4">
-        <div className="glass rounded-full px-5 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-display font-semibold text-sm">
+        <div className="glass rounded-full px-3 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-display font-semibold text-sm shrink-0">
             <span className="w-7 h-7 rounded-full bg-ink text-citron grid place-items-center">
               <Sparkles size={14} />
             </span>
-            Blueprint
+            <span className="sm:inline">Blueprint</span>
           </div>
           <div className="hidden sm:flex items-center gap-5 text-sm font-medium text-inksoft">
             <a href="#how" className="hover:text-ink transition-colors">How it works</a>
             <a href="#capabilities" className="hover:text-ink transition-colors">Capabilities</a>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onStart} className="btn-dark !py-2 !px-4 text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button onClick={onStart} className="btn-dark !py-2 !px-3 sm:!px-4 text-xs">
               Sign up
             </button>
-            <button onClick={openSignIn} className="btn-ghost !py-2 !px-4 text-xs">
+            <button onClick={openSignIn} className="btn-ghost !py-2 !px-3 sm:!px-4 text-xs">
               Sign in
             </button>
           </div>
