@@ -37,20 +37,18 @@ export default function DashboardCFO({
   improvementItems: ImprovementItem[];
   onSelectProcess: (proc: Process) => void;
 }) {
-  const coverageData = useMemo(
-    () =>
-      SUBFUNCTIONS_LIST.map((sf) => ({
-        name: sf
-          .replace(/\s*\(.*?\)/, '')
-          .split(' & ')[0]!
-          .split(' ')
-          .slice(0, 2)
-          .join(' '),
-        full: sf,
-        processes: processes.filter((p) => p.subFunction === sf).length,
-      })),
-    [processes],
-  );
+  const coverageData = useMemo(() => {
+    const rows = SUBFUNCTIONS_LIST.map((sf) => ({
+      name: sf.length > 28 ? `${sf.slice(0, 26)}…` : sf,
+      full: sf,
+      processes: processes.filter((p) => p.subFunction === sf).length,
+    }));
+    const filled = rows.filter((r) => r.processes > 0).sort((a, b) => b.processes - a.processes);
+    // Empty catalogue → nothing to plot (avoid 18 crushed zero bars).
+    return filled;
+  }, [processes]);
+
+  const coverageHeight = Math.max(180, coverageData.length * 36 + 24);
 
   const counts = classificationCounts(processes);
   const classData = (['automation', 'agentic-ai', 'human-in-the-loop'] as const)
@@ -100,23 +98,36 @@ export default function DashboardCFO({
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
-        {/* Coverage by subfunction */}
-        <div className="card p-6 lg:col-span-3">
+        {/* Coverage by subfunction — horizontal so long labels stay readable */}
+        <div className="card p-5 sm:p-6 lg:col-span-3">
           <h3 className="font-display font-semibold text-sm">Documentation coverage by line of work</h3>
           <p className="text-xs text-mute mt-0.5 mb-4">Documented processes per subfunction</p>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={coverageData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 10.5, fill: 'var(--color-mute)' }} axisLine={{ stroke: 'var(--color-line)' }} tickLine={false} interval={0} />
-              <YAxis tick={{ fontSize: 10.5, fill: 'var(--color-mute)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip
-                cursor={{ fill: 'rgba(23,23,28,0.04)' }}
-                contentStyle={TOOLTIP_STYLE}
-                formatter={(value: any) => [`${value} process${value === 1 ? '' : 'es'}`, 'Documented']}
-                labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.full ?? ''}
-              />
-              <Bar dataKey="processes" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} maxBarSize={34} />
-            </BarChart>
-          </ResponsiveContainer>
+          {coverageData.length === 0 ? (
+            <div className="h-44 grid place-items-center text-sm text-faint text-center px-6">
+              No processes documented yet — coverage appears here as teams capture work.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={coverageHeight}>
+              <BarChart data={coverageData} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-mute)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={128}
+                  tick={{ fontSize: 11, fill: 'var(--color-mute)' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(23,23,28,0.04)' }}
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: any) => [`${value} process${value === 1 ? '' : 'es'}`, 'Documented']}
+                  labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.full ?? ''}
+                />
+                <Bar dataKey="processes" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} maxBarSize={22} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Classification mix */}
