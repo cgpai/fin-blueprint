@@ -2,16 +2,22 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "rewrites": [
-    { "source": "/api/ai/mine", "destination": "/api/ai/mine" },
-    { "source": "/api/ai/analyze", "destination": "/api/ai/analyze" },
-    { "source": "/api/ai/propose-deployment", "destination": "/api/ai/propose-deployment" },
-    { "source": "/api/ai/meeting-summary", "destination": "/api/ai/meeting-summary" }
-  ],
   "functions": {
-    "api/ai/mine.ts": { "maxDuration": 60 },
-    "api/ai/analyze.ts": { "maxDuration": 60 },
-    "api/ai/propose-deployment.ts": { "maxDuration": 60 },
-    "api/ai/meeting-summary.ts": { "maxDuration": 60 }
+    "api/ai/mine.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server.ts"
+    },
+    "api/ai/analyze.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server.ts"
+    },
+    "api/ai/propose-deployment.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server.ts"
+    },
+    "api/ai/meeting-summary.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server.ts"
+    }
   }
 }

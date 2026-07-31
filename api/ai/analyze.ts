@@ -1,10 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import app from '../../server';
+import app from '../../server.ts';
 
 function run(path: string) {
   return (req: VercelRequest, res: VercelResponse) => {
     req.url = path;
-    // @ts-expect-error VercelRequest is compatible enough for Express
     return app(req, res);
   };
 }
