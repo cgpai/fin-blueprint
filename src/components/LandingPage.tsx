@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
@@ -5,13 +6,18 @@ import {
   BookOpen,
   ChartNoAxesColumn,
   Fingerprint,
+  Eye,
+  EyeOff,
   LayoutDashboard,
   Lightbulb,
   MessagesSquare,
   ScanSearch,
   Sparkles,
   UsersRound,
+  X,
 } from 'lucide-react';
+import { UserProfile } from '../types';
+import { hashPassword } from '../lib/utils';
 
 const HOW_IT_WORKS = [
   {
@@ -45,7 +51,60 @@ const CAPABILITIES = [
   { icon: MessagesSquare, title: 'Targeted notifications', body: 'Reach people by level or line-of-work when detail is missing.' },
 ];
 
-export default function LandingPage({ onStart }: { onStart: () => void }) {
+export default function LandingPage({
+  onStart,
+  registeredProfiles,
+  onLogin,
+}: {
+  onStart: () => void;
+  registeredProfiles: UserProfile[];
+  onLogin: (profile: UserProfile) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [signInStep, setSignInStep] = useState<'email' | 'password'>('email');
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState('');
+
+  const openSignIn = () => {
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
+    setError('');
+    setSignInStep('email');
+    setSignInOpen(true);
+  };
+
+  const continueToPassword = () => {
+    if (registeredProfiles.length === 0) {
+      setError('User list is still loading. Try again in a moment.');
+      return;
+    }
+    const found = registeredProfiles.some((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
+    if (!found) {
+      setError('Email is not registered yet.');
+      return;
+    }
+    setError('');
+    setSignInStep('password');
+  };
+
+  const signIn = async () => {
+    if (!email.trim() || !password || checking) return;
+    setChecking(true);
+    setError('');
+    const profile = registeredProfiles.find((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
+    const hash = await hashPassword(password);
+    if (profile && profile.passwordHash === hash) {
+      onLogin(profile);
+    } else {
+      setError('Email or password did not match.');
+    }
+    setChecking(false);
+  };
+
   return (
     <div className="min-h-full sky-wash overflow-y-auto">
       {/* Floating pill nav */}
@@ -61,11 +120,101 @@ export default function LandingPage({ onStart }: { onStart: () => void }) {
             <a href="#how" className="hover:text-ink transition-colors">How it works</a>
             <a href="#capabilities" className="hover:text-ink transition-colors">Capabilities</a>
           </div>
-          <button onClick={onStart} className="btn-dark !py-2 !px-4 text-xs">
-            Start
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onStart} className="btn-dark !py-2 !px-4 text-xs">
+              Sign up
+            </button>
+            <button onClick={openSignIn} className="btn-ghost !py-2 !px-4 text-xs">
+              Sign in
+            </button>
+          </div>
         </div>
       </nav>
+
+      {signInOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/30 px-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 14, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="card w-full max-w-sm p-5 shadow-lift"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-lg font-semibold tracking-tight">Sign in</h2>
+                <p className="text-xs text-mute mt-0.5">Open your saved Blueprint workspace.</p>
+              </div>
+              <button className="btn-ghost !p-2 !rounded-full" onClick={() => setSignInOpen(false)} aria-label="Close sign in">
+                <X size={14} />
+              </button>
+            </div>
+
+            {signInStep === 'email' ? (
+              <div className="mt-5">
+                <label className="label" htmlFor="signin-email">Email</label>
+                <input
+                  id="signin-email"
+                  className="field"
+                  type="email"
+                  autoFocus
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') continueToPassword();
+                  }}
+                />
+                {error && <div className="text-xs text-bad mt-2">{error}</div>}
+                <button className="btn-dark w-full mt-4" disabled={!email.trim()} onClick={continueToPassword}>
+                  Continue <ArrowRight size={15} />
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5">
+                <div className="chip bg-veil-soft border-transparent text-veil-deep mb-3">{email}</div>
+                <label className="label" htmlFor="signin-password">Password</label>
+                <div className="relative">
+                  <input
+                    id="signin-password"
+                    className="field pr-11"
+                    type={showPassword ? 'text' : 'password'}
+                    autoFocus
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') signIn();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-2 !rounded-full"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                {error && <div className="text-xs text-bad mt-2">{error}</div>}
+                <div className="mt-4 flex gap-2">
+                  <button className="btn-ghost flex-1" onClick={() => setSignInStep('email')}>
+                    Back
+                  </button>
+                  <button className="btn-dark flex-1" disabled={!password || checking} onClick={signIn}>
+                    {checking ? 'Checking...' : 'Sign in'}
+                  </button>
+                </div>
+                <p className="mt-3 text-xs text-mute">Forgot password? Ask your programme admin to reset your account.</p>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
 
       {/* Hero */}
       <header className="max-w-5xl mx-auto px-6 pt-20 pb-16 text-center">

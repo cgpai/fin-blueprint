@@ -6,6 +6,7 @@ import RemoteLogin from './components/RemoteLogin';
 import CaptureJourney from './components/journey/CaptureJourney';
 import Workspace from './components/Workspace';
 import { isRemoteEnabled, mapProcessToRemoteInput, submitRemoteProcess, RemoteUser } from './lib/blueprintApi';
+import { AppSnapshot, loadSnapshot, saveSnapshot, spreadsheetEnabled } from './lib/spreadsheetDb';
 
 import {
   AppPhase,
@@ -86,6 +87,8 @@ export default function App() {
   const [notifications, setNotifications] = useState<UserNotification[]>(() => loadJSON('bp_notifications_v1', [] as UserNotification[]));
   const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(() => loadJSON('bp_broadcasts_v1', [] as NotificationLog[]));
   const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => loadJSON('bp_improvements_v1', [] as ImprovementItem[]));
+  const [registeredProfiles, setRegisteredProfiles] = useState<UserProfile[]>([]);
+  const [remoteReady, setRemoteReady] = useState(!spreadsheetEnabled);
 
   // ---------- Project Management state ----------
   const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, [] as ManagedProject[]));
@@ -94,6 +97,26 @@ export default function App() {
   const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(() => loadJSON(STORAGE.meetingNotes, [] as MeetingNote[]));
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() => loadJSON(STORAGE.ganttTasks, [] as GanttTask[]));
   const [projectOkrs, setProjectOkrs] = useState<ProjectOKR[]>(() => loadJSON(STORAGE.projectOkrs, [] as ProjectOKR[]));
+
+  useEffect(() => {
+    if (!spreadsheetEnabled) return;
+    loadSnapshot()
+      .then((remote) => {
+        if (!remote) return;
+        const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
+        if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
+        if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
+        else if (remotePhase && profile) setPhase(remotePhase);
+        if (remote.processes) setProcesses(remote.processes);
+        if (remote.systems) setAvailableSystems(remote.systems);
+        if (remote.notifications) setNotifications(remote.notifications);
+        if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
+        if (remote.improvementItems) setImprovementItems(remote.improvementItems);
+        if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+      })
+      .catch((err) => console.error('Spreadsheet sync load failed:', err))
+      .finally(() => setRemoteReady(true));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE.processes, JSON.stringify(processes));
@@ -133,6 +156,27 @@ export default function App() {
     }
   }, [phase]);
 
+  useEffect(() => {
+    if (!spreadsheetEnabled || !remoteReady) return;
+    const persistedPhase = phase === 'journey' || phase === 'workspace' ? phase : localStorage.getItem(STORAGE.phase);
+    const snapshot: AppSnapshot = {
+      profile,
+      profiles: Object.fromEntries(
+        [...registeredProfiles, ...(profile ? [profile] : [])].map((p) => [(p.email || p.name).trim().toLowerCase(), p]),
+      ),
+      phase: persistedPhase === 'journey' || persistedPhase === 'workspace' ? persistedPhase : null,
+      processes,
+      systems: availableSystems,
+      notifications,
+      adminBroadcastLogs,
+      improvementItems,
+    };
+    const timer = window.setTimeout(() => {
+      saveSnapshot(snapshot).catch((err) => console.error('Spreadsheet sync save failed:', err));
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady]);
+
   // Super-admin runs the programme — never the staff capture journey.
   useEffect(() => {
     if (profile?.role === 'Admin' && phase === 'journey') {
@@ -166,12 +210,30 @@ export default function App() {
     localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
     sessionStorage.setItem(STORAGE.unlocked, 'true');
     setProfile(newProfile);
+    setRegisteredProfiles((prev) => {
+      const key = (newProfile.email || newProfile.name).trim().toLowerCase();
+      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), newProfile];
+    });
     setCurrentPersona(newProfile.role);
     if (newProfile.role === 'Admin') {
       setWorkspaceTab('admin');
       setPhase('workspace');
     } else {
       setPhase('journey');
+    }
+  };
+
+  const handleLandingLogin = (loggedIn: UserProfile) => {
+    localStorage.setItem(STORAGE.profile, JSON.stringify(loggedIn));
+    sessionStorage.setItem(STORAGE.unlocked, 'true');
+    setProfile(loggedIn);
+    setCurrentPersona(loggedIn.role);
+    if (loggedIn.role === 'Admin') {
+      setWorkspaceTab('admin');
+      setPhase('workspace');
+    } else {
+      const savedPhase = localStorage.getItem(STORAGE.phase);
+      setPhase(savedPhase === 'workspace' ? 'workspace' : 'journey');
     }
   };
 
@@ -486,11 +548,23 @@ export default function App() {
   }
 
   if (phase === 'landing') {
-    return <LandingPage onStart={() => setPhase('onboarding')} />;
+    return (
+      <LandingPage
+        onStart={() => setPhase('onboarding')}
+        registeredProfiles={registeredProfiles}
+        onLogin={handleLandingLogin}
+      />
+    );
   }
 
   if (phase === 'onboarding') {
-    return <Onboarding onComplete={handleOnboardingComplete} onBack={() => setPhase('landing')} />;
+    return (
+      <Onboarding
+        onComplete={handleOnboardingComplete}
+        onBack={() => setPhase('landing')}
+        registeredProfiles={registeredProfiles}
+      />
+    );
   }
 
   if (phase === 'locked' && profile) {
@@ -570,5 +644,11 @@ export default function App() {
   // Fallback — inconsistent persisted state, restart cleanly.
   return isRemoteEnabled()
     ? <RemoteLogin onSignedIn={handleRemoteSignedIn} />
-    : <LandingPage onStart={() => setPhase('onboarding')} />;
+    : (
+      <LandingPage
+        onStart={() => setPhase('onboarding')}
+        registeredProfiles={registeredProfiles}
+        onLogin={handleLandingLogin}
+      />
+    );
 }

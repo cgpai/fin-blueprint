@@ -23,9 +23,11 @@ const slide = {
 export default function Onboarding({
   onComplete,
   onBack,
+  registeredProfiles = [],
 }: {
   onComplete: (profile: UserProfile) => void;
   onBack: () => void;
+  registeredProfiles?: UserProfile[];
 }) {
   const [step, setStep] = useState(0); // 0 role · 1 name · 2 password · 3 done
   const [role, setRole] = useState<Persona | null>(null);
@@ -35,6 +37,11 @@ export default function Onboarding({
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const emailValue = email.trim().toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const emailTaken = !!emailValue && registeredProfiles.some((p) => (p.email || '').trim().toLowerCase() === emailValue);
+  const identityValid = name.trim().length >= 2 && emailValid && !emailTaken;
 
   const passwordChecks = [
     { ok: password.length >= 8, text: 'At least 8 characters' },
@@ -136,7 +143,7 @@ export default function Onboarding({
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor="ob-email">Work email <span className="text-faint font-normal">(optional)</span></label>
+                    <label className="label" htmlFor="ob-email">Work email</label>
                     <input
                       id="ob-email"
                       type="email"
@@ -144,8 +151,14 @@ export default function Onboarding({
                       placeholder="you@company.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
+                      onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
                     />
+                    {email.trim() && !emailValid && <div className="text-xs text-bad mt-2">Enter a valid work email.</div>}
+                    {emailTaken && (
+                      <div className="text-xs text-bad mt-2">
+                        Email already registered. Please sign in instead.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="label" htmlFor="ob-role-override">
@@ -157,11 +170,11 @@ export default function Onboarding({
                       placeholder="e.g. Senior Finance Manager, CFO Consultant"
                       value={manualRoleOverride}
                       onChange={(e) => setManualRoleOverride(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
+                      onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
                     />
                   </div>
                 </div>
-                <button className="btn-dark w-full mt-6" disabled={!name.trim()} onClick={() => setStep(2)}>
+                <button className="btn-dark w-full mt-6" disabled={!identityValid} onClick={() => setStep(2)}>
                   Continue <ArrowRight size={15} />
                 </button>
               </motion.div>
