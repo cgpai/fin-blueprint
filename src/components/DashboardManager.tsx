@@ -60,7 +60,7 @@ export default function DashboardManager({
     <div className="animate-fade-up space-y-5">
       <h2 className="font-display text-xl font-semibold tracking-tight">Team space</h2>
 
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-3 gap-4 print:break-inside-avoid">
         <Stat label="Team completion" value={`${completionPct}%`} hint="of personnel fully documented" accent="citron" />
         <Stat label="High-effort workflows" value={highEffort.length} hint="flagged for improvement" accent="veil" />
         <Stat label="Guidance items" value={improvementItems.filter((i) => i.status !== 'Resolved').length} hint="open vs resolved tracked below" />
@@ -68,7 +68,7 @@ export default function DashboardManager({
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Personnel completion tracker */}
-        <div className="card p-6">
+        <div className="card p-6 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
             <CircleCheck size={15} className="text-citron-deep" /> Personnel documentation tracker
           </h3>
@@ -89,7 +89,7 @@ export default function DashboardManager({
                 </span>
                 {status !== 'Complete' && (
                   <button
-                    className="btn-ghost !p-2 shrink-0 disabled:opacity-40"
+                    className="btn-ghost !p-2 shrink-0 disabled:opacity-40 print:hidden"
                     title={remindedEmails.includes(user.email) ? 'Reminder sent' : 'Send a reminder'}
                     aria-label={`Remind ${user.name}`}
                     disabled={remindedEmails.includes(user.email)}
@@ -111,7 +111,7 @@ export default function DashboardManager({
         </div>
 
         {/* High-effort flags */}
-        <div className="card p-6">
+        <div className="card p-6 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
             <Flame size={15} className="text-warn" /> High-effort workflows
           </h3>
@@ -121,7 +121,7 @@ export default function DashboardManager({
               <li className="text-sm text-faint py-6 text-center">Nothing flagged yet — run AI refinement on your team&rsquo;s processes.</li>
             )}
             {highEffort.map((proc) => (
-              <li key={proc.id} className="rounded-2xl border border-line p-4">
+              <li key={proc.id} className="rounded-2xl border border-line p-4 print:break-inside-avoid">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold truncate">{proc.title}</div>
@@ -138,7 +138,7 @@ export default function DashboardManager({
                   {tracked.has(proc.id) ? (
                     <span className="text-[11px] font-semibold text-ok">Tracked ✓</span>
                   ) : (
-                    <button className="btn-ghost !py-1.5 !px-3 !text-[11px]" onClick={() => acceptRecommendation(proc)}>
+                    <button className="btn-ghost !py-1.5 !px-3 !text-[11px] print:hidden" onClick={() => acceptRecommendation(proc)}>
                       <Plus size={11} /> Track improvement
                     </button>
                   )}
@@ -150,7 +150,7 @@ export default function DashboardManager({
       </div>
 
       {/* Improvement / guidance tracker */}
-      <div className="card p-6">
+      <div className="card p-6 print:break-inside-avoid">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
           <Lightbulb size={15} className="text-veil-deep" /> Improvement &amp; guidance tracker
         </h3>

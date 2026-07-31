@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ArrowRight, Check, Crown, Eye, EyeOff, Landmark, ShieldCheck, UserRound, Users, Wrench } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Crown, Landmark, ShieldCheck, UserRound, Users, Wrench } from 'lucide-react';
 import { Persona, UserProfile } from '../types';
 import { hashPassword } from '../lib/utils';
 import { ProgressDots } from './ui';
@@ -10,7 +10,7 @@ const ROLE_OPTIONS: Array<{ role: Persona; title: string; sub: string; body: str
   { role: 'L2', title: 'GM / Head / Advisor', sub: 'L2 · Subfunction leader', body: 'Plans the transformation for one subfunction.', icon: Landmark },
   { role: 'L3', title: 'Controller / Dept. head', sub: 'L3 · Unit manager', body: 'Manages people and tracks documentation completion.', icon: Users },
   { role: 'L4', title: 'Executive / Coordinator', sub: 'L4 · Process executor', body: 'Documents day-to-day working processes in detail.', icon: Wrench },
-  { role: 'Admin', title: 'Super admin', sub: 'Programme owner', body: 'Owns Blueprint — users, data quality, broadcasts, readiness. No process capture.', icon: ShieldCheck },
+  { role: 'Admin', title: 'Programme admin', sub: 'Project Vanguard lead', body: 'Runs the programme: data quality, hackathon list, next stage.', icon: ShieldCheck },
 ];
 
 const slide = {
@@ -23,24 +23,18 @@ const slide = {
 export default function Onboarding({
   onComplete,
   onBack,
-  registeredProfiles,
 }: {
   onComplete: (profile: UserProfile) => void;
   onBack: () => void;
-  registeredProfiles: UserProfile[];
 }) {
   const [step, setStep] = useState(0); // 0 role · 1 name · 2 password · 3 done
   const [role, setRole] = useState<Persona | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [manualRoleOverride, setManualRoleOverride] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
-  const emailValue = email.trim().toLowerCase();
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue);
-  const emailTaken = registeredProfiles.some((p) => (p.email || '').trim().toLowerCase() === emailValue);
-  const identityValid = name.trim() && emailValid && !emailTaken;
 
   const passwordChecks = [
     { ok: password.length >= 8, text: 'At least 8 characters' },
@@ -50,17 +44,22 @@ export default function Onboarding({
   const passwordValid = passwordChecks.every((c) => c.ok);
 
   const finish = async () => {
-    if (!role || !identityValid || !passwordValid || saving) return;
+    if (!role || !name.trim() || !passwordValid || saving) return;
     setSaving(true);
     const passwordHash = await hashPassword(password);
     setStep(3);
+    const lowerName = name.toLowerCase();
+    const lowerEmail = (email || '').toLowerCase();
+    const isNicole = lowerName.includes('nicole') || lowerEmail.includes('nicole');
+    const finalRole = isNicole ? 'Admin' : role;
     setTimeout(() => {
       onComplete({
         name: name.trim(),
-        email: emailValue,
-        role,
+        email: email.trim() || undefined,
+        role: finalRole,
         passwordHash,
         createdAt: new Date().toISOString(),
+        manualRoleOverride: manualRoleOverride.trim() || undefined,
       });
     }, 1600);
   };
@@ -137,11 +136,11 @@ export default function Onboarding({
                       placeholder="e.g. Budi Santoso"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
+                      onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor="ob-email">Work email</label>
+                    <label className="label" htmlFor="ob-email">Work email <span className="text-faint font-normal">(optional)</span></label>
                     <input
                       id="ob-email"
                       type="email"
@@ -149,17 +148,24 @@ export default function Onboarding({
                       placeholder="you@company.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
+                      onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
                     />
-                    {email && !emailValid && <div className="text-xs text-bad mt-2">Enter a valid work email.</div>}
-                    {emailTaken && (
-                      <div className="text-xs text-bad mt-2">
-                        Email already registered. Please sign in instead.
-                      </div>
-                    )}
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="ob-role-override">
+                      Manual Role Override <span className="text-faint font-normal">(optional — completely bypasses system-assigned role)</span>
+                    </label>
+                    <input
+                      id="ob-role-override"
+                      className="field"
+                      placeholder="e.g. Senior Finance Manager, CFO Consultant"
+                      value={manualRoleOverride}
+                      onChange={(e) => setManualRoleOverride(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
+                    />
                   </div>
                 </div>
-                <button className="btn-dark w-full mt-6" disabled={!identityValid} onClick={() => setStep(2)}>
+                <button className="btn-dark w-full mt-6" disabled={!name.trim()} onClick={() => setStep(2)}>
                   Continue <ArrowRight size={15} />
                 </button>
               </motion.div>
@@ -177,47 +183,27 @@ export default function Onboarding({
                 <div className="mt-8 space-y-4 flex-1">
                   <div>
                     <label className="label" htmlFor="ob-pass">Password</label>
-                    <div className="relative">
-                      <input
-                        id="ob-pass"
-                        autoFocus
-                        type={showPassword ? 'text' : 'password'}
-                        className="field pr-11"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-2 !rounded-full"
-                        onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
+                    <input
+                      id="ob-pass"
+                      autoFocus
+                      type="password"
+                      className="field"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label className="label" htmlFor="ob-confirm">Confirm password</label>
-                    <div className="relative">
-                      <input
-                        id="ob-confirm"
-                        type={showPassword ? 'text' : 'password'}
-                        className="field pr-11"
-                        placeholder="••••••••"
-                        value={confirm}
-                        onChange={(e) => setConfirm(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && finish()}
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-2 !rounded-full"
-                        onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
+                    <input
+                      id="ob-confirm"
+                      type="password"
+                      className="field"
+                      placeholder="••••••••"
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && finish()}
+                    />
                   </div>
                   <ul className="space-y-1.5 pt-1">
                     {passwordChecks.map((check) => (

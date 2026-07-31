@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { DraftProcess, ProcessStep, SubFunction, SystemItem } from '../../types';
 import { computeCompleteness, stepGaps, uid } from '../../lib/utils';
-import { ClassChip, Meter, TagList } from '../ui';
+import { ClassChip, Meter, TagList, AutoTextarea } from '../ui';
 import { MOCK_USERS, SUBFUNCTIONS_LIST } from '../../data/mockData';
 
 function AttributeEditor({
@@ -156,7 +156,7 @@ function ProcessEditor({
         )}
       </div>
 
-      <div className="mt-4 grid sm:grid-cols-2 gap-4">
+      <div className="mt-4 grid sm:grid-cols-3 gap-4">
         <div>
           <label className="label">Process title</label>
           <input
@@ -182,6 +182,16 @@ function ProcessEditor({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label">Manual Role Override <span className="text-faint font-normal">(optional)</span></label>
+          <input
+            className="field"
+            value={process.manualRoleOverride || ''}
+            onChange={(e) => onChange({ ...process, manualRoleOverride: e.target.value })}
+            placeholder="e.g. CFO Consultant"
+            title="Dedicated Role override field. Accepts raw manual user input only, completely bypassing AI editing/validation."
+          />
         </div>
       </div>
 
@@ -239,7 +249,7 @@ function ProcessEditor({
                   </div>
                   <div className="mt-3">
                     <label className="label">Description <span className="text-faint font-normal">(trigger → action → result)</span></label>
-                    <textarea className="field !py-2 min-h-20 resize-y text-sm" value={step.description} onChange={(e) => updateStep(step.id, { description: e.target.value })} />
+                    <AutoTextarea className="field !py-2 min-h-20 resize-y text-sm" value={step.description} onChange={(e) => updateStep(step.id, { description: e.target.value })} />
                   </div>
                   {step.aiRationale && (
                     <div className="mt-2 text-[11px] text-mute bg-canvas rounded-xl px-3 py-2">
@@ -373,17 +383,16 @@ export default function ReviewSteps({
 
       <div className="mt-6 space-y-5">
         {processes.map((p, i) => (
-          <div key={p.id}>
-            <ProcessEditor
-              process={p}
-              index={i}
-              total={processes.length}
-              onChange={(updated) => updateProcess(p.id, updated)}
-              onDelete={() => deleteProcess(p.id)}
-              systemNames={systemNames}
-              onAddSystem={onAddSystem}
-            />
-          </div>
+          <ProcessEditor
+            key={p.id}
+            process={p}
+            index={i}
+            total={processes.length}
+            onChange={(updated) => updateProcess(p.id, updated)}
+            onDelete={() => deleteProcess(p.id)}
+            systemNames={systemNames}
+            onAddSystem={onAddSystem}
+          />
         ))}
       </div>
 

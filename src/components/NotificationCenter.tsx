@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CheckCheck, Inbox, MailOpen, Megaphone, Reply } from 'lucide-react';
 import { NotificationLog, Persona, UserNotification } from '../types';
 import { timeAgo } from '../lib/utils';
-import { Avatar, EmptyState } from './ui';
+import { Avatar, EmptyState, AutoTextarea } from './ui';
 
 /** Inbox & broadcast history (US-11/12/22) — reminders, tags and admin chases land here. */
 export default function NotificationCenter({
@@ -62,16 +62,17 @@ export default function NotificationCenter({
                 </button>
 
                 {isOpen && (
-                  <div className="px-5 pb-5 pl-[4.6rem] animate-fade-up">
-                    <p className="text-sm text-inksoft leading-relaxed max-w-2xl">{notif.message}</p>
+                  <div className="px-5 pb-5 pl-12 md:pl-[4.6rem] animate-fade-up flex flex-col h-auto min-h-0">
+                    <p className="text-sm text-inksoft leading-relaxed max-w-2xl whitespace-pre-wrap break-words h-auto">{notif.message}</p>
                     {notif.responseText && (
-                      <div className="mt-3 text-xs bg-canvas rounded-xl px-3.5 py-2.5 max-w-2xl">
-                        <span className="font-semibold text-mute">Your response:</span> {notif.responseText}
+                      <div className="mt-3 text-xs bg-canvas rounded-xl px-3.5 py-2.5 max-w-2xl whitespace-pre-wrap break-words h-auto flex flex-col gap-1">
+                        <span className="font-semibold text-mute">Your response:</span>
+                        <div className="text-ink">{notif.responseText}</div>
                       </div>
                     )}
                     {notif.actionRequired && notif.status !== 'Actioned' && (
                       <div className="mt-3.5 max-w-2xl">
-                        <textarea
+                        <AutoTextarea
                           className="field !py-2.5 min-h-20 text-sm"
                           placeholder="Respond with the requested detail or a status update…"
                           value={reply}

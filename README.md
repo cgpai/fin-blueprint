@@ -42,38 +42,27 @@ npm run dev        # http://localhost:3000
 
 ### AI engine
 
-The mining and refinement engines run in the browser. If `VITE_GEMINI_API_KEY`
-is set, the app calls Gemini directly from the frontend; if it is empty or the
-request fails, it falls back to local heuristics.
+The mining (`POST /api/ai/mine`) and refinement (`POST /api/ai/analyze`)
+endpoints use **Gemini** when a key is configured, and fall back to a built-in
+rule-based engine otherwise — the demo always works without any key.
 
-Browser-side Gemini is only suitable for one-off/demo use because the key is
-visible to anyone who can open the app. Use a restricted, low-quota key.
-
-The browser miner segments one free-text dump into N distinct processes, then
+`/api/ai/mine` **segments one free-text dump into N distinct processes** (it
+separates unrelated workstreams and discards non-work meta-content), then
 structures the steps of each and maps every process to exactly one of the fixed
 **lines of work** (`SUBFUNCTIONS_LIST` in `src/data/mockData.ts`). The capture
 review stage lets you rename each process, edit its steps, and split/merge
 before all of them save as separate catalogue entries.
 
-### Spreadsheet sync
-
-By default the app runs local-first with `localStorage`. To sync through Google
-Sheets while keeping Vercel frontend-only:
-
-1. Create a Google Sheet.
-2. Open **Extensions -> Apps Script**.
-3. Paste `docs/google-apps-script.js`.
-4. Deploy it as a Web App with access set for the intended users.
-5. Set `VITE_SHEETS_ENDPOINT` in Vercel to the Web App URL.
-
-The spreadsheet stores a simple JSON snapshot per key in a `state` sheet.
+To enable Gemini, set `GEMINI_API_KEY` in `.env.local` (the server loads
+`.env.local` first, then `.env`). Override the model with `GEMINI_MODEL`
+(default `gemini-3.5-flash`).
 
 ### Other scripts
 
 ```bash
 npm run lint       # typecheck (tsc --noEmit)
-npm run build      # production build
-npm run start      # preview the production build
+npm run build      # production build (vite + esbuild server bundle)
+npm run start      # serve the production build
 ```
 
 ## Notes

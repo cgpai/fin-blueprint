@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import {
   Bar,
   BarChart,
@@ -7,11 +7,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Database, Download, Megaphone, Rocket, Send, Trophy, UsersRound } from 'lucide-react';
-import { ImprovementItem, Process, SubFunction, SystemItem, UserProfile } from '../types';
-import { SUBFUNCTIONS_LIST } from '../data/mockData';
+import { Database, Download, Megaphone, Rocket, Send, Trophy, Plus, Edit2, Trash2, Settings2, Search, X, Check, HelpCircle } from 'lucide-react';
+import { ImprovementItem, Process, SubFunction, SystemItem } from '../types';
+import { MOCK_USERS, SUBFUNCTIONS_LIST } from '../data/mockData';
 import { CHART_COLORS, classificationCounts } from '../lib/utils';
-import { Meter, Stat } from './ui';
+import { Meter, Stat, AutoTextarea } from './ui';
 
 const TOOLTIP_STYLE = {
   borderRadius: 14,
@@ -24,17 +24,71 @@ const TOOLTIP_STYLE = {
 
 const READINESS_THRESHOLD = 85;
 
+const CustomYAxisTick = (props: any) => {
+  const { x, y, payload } = props;
+  const name = payload.value || '';
+  
+  // Replace non-breaking spaces back to normal spaces for splitting, if any exist
+  const cleanName = name.replace(/\u00A0/g, ' ');
+  
+  // Split name into words
+  const words = cleanName.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+  
+  // Simple wrapping logic: group words so that each line is at most 16 characters
+  words.forEach((word: string) => {
+    if (!currentLine) {
+      currentLine = word;
+    } else if (currentLine.length + word.length + 1 <= 16) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  });
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  const lineHeight = 12;
+  const totalHeight = lines.length * lineHeight;
+  const startDy = -(totalHeight / 2) + lineHeight / 2 + 3; // +3 is for vertical alignment adjustment
+
+  return (
+    <g transform={`translate(${x - 6}, ${y})`}>
+      <text
+        textAnchor="end"
+        fill="var(--color-mute)"
+        fontSize="10.5"
+        className="font-sans"
+      >
+        {lines.map((line, idx) => (
+          <tspan
+            key={idx}
+            x={0}
+            dy={idx === 0 ? startDy : lineHeight}
+          >
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+};
+
+
 /** Programme admin (US-21/22/23) — hackathon dataset, data quality, next-stage readiness, broadcasts. */
 export default function AdminPanel({
   processes,
   availableSystems,
-  registeredProfiles,
+  onUpdateSystems,
   improvementItems,
   onTriggerAdminNotification,
 }: {
   processes: Process[];
   availableSystems: SystemItem[];
-  registeredProfiles: UserProfile[];
+  onUpdateSystems: (systems: SystemItem[]) => void;
   improvementItems: ImprovementItem[];
   onTriggerAdminNotification: (subject: string, msg: string, type: 'individual' | 'level' | 'subfunction' | 'all', val: string) => void;
 }) {
@@ -43,6 +97,95 @@ export default function AdminPanel({
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sentFlash, setSentFlash] = useState(false);
+
+  // System Configuration States
+  const [systemSearchQuery, setSystemSearchQuery] = useState('');
+  const [editingSystemId, setEditingSystemId] = useState<string | null>(null); // 'new' or specific id
+  const [systemNameInput, setSystemNameInput] = useState('');
+  const [systemCategoryInput, setSystemCategoryInput] = useState('Enterprise Resource Planning (Financial Core)');
+  const [systemDescriptionInput, setSystemDescriptionInput] = useState('');
+  const [systemToDelete, setSystemToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const getProcessCountForSystem = (systemName: string) => {
+    return processes.filter(p => 
+      p.steps.some(s => s.systems.some(sys => sys.toLowerCase() === systemName.toLowerCase() || sys.toLowerCase().startsWith(systemName.toLowerCase())))
+    ).length;
+  };
+
+  const handleStartAddSystem = () => {
+    setEditingSystemId('new');
+    setSystemNameInput('');
+    setSystemCategoryInput('Enterprise Resource Planning (Financial Core)');
+    setSystemDescriptionInput('');
+    setSystemToDelete(null);
+  };
+
+  const handleStartEditSystem = (sys: SystemItem) => {
+    setEditingSystemId(sys.id);
+    setSystemNameInput(sys.name);
+    setSystemCategoryInput(sys.category);
+    setSystemDescriptionInput(sys.description || '');
+    setSystemToDelete(null);
+  };
+
+  const handleCancelSystemEdit = () => {
+    setEditingSystemId(null);
+    setSystemNameInput('');
+    setSystemDescriptionInput('');
+  };
+
+  const handleSaveSystem = () => {
+    if (!systemNameInput.trim()) return;
+
+    if (editingSystemId === 'new') {
+      const newSys: SystemItem = {
+        id: `sys-${Date.now()}`,
+        name: systemNameInput.trim(),
+        category: systemCategoryInput,
+        processCount: 0,
+        description: systemDescriptionInput.trim()
+      };
+      onUpdateSystems([...availableSystems, newSys]);
+    } else {
+      const updated = availableSystems.map(s => {
+        if (s.id === editingSystemId) {
+          return {
+            ...s,
+            name: systemNameInput.trim(),
+            category: systemCategoryInput,
+            description: systemDescriptionInput.trim()
+          };
+        }
+        return s;
+      });
+      onUpdateSystems(updated);
+    }
+
+    setEditingSystemId(null);
+    setSystemNameInput('');
+    setSystemDescriptionInput('');
+  };
+
+  const handleDeleteSystem = (id: string, name: string) => {
+    setSystemToDelete({ id, name });
+  };
+
+  const confirmDeleteSystem = () => {
+    if (!systemToDelete) return;
+    const filtered = availableSystems.filter(s => s.id !== systemToDelete.id);
+    onUpdateSystems(filtered);
+    setSystemToDelete(null);
+  };
+
+  const filteredSystems = useMemo(() => {
+    const q = systemSearchQuery.toLowerCase().trim();
+    if (!q) return availableSystems;
+    return availableSystems.filter(s => 
+      s.name.toLowerCase().includes(q) || 
+      s.category.toLowerCase().includes(q) || 
+      (s.description && s.description.toLowerCase().includes(q))
+    );
+  }, [availableSystems, systemSearchQuery]);
 
   const avgCompleteness = processes.length
     ? Math.round(processes.reduce((s, p) => s + p.completenessScore, 0) / processes.length)
@@ -69,7 +212,6 @@ export default function AdminPanel({
     .slice(0, 6);
 
   const lowCompleteness = processes.filter((p) => p.completenessScore < READINESS_THRESHOLD);
-  const registeredUsers = [...registeredProfiles].sort((a, b) => a.name.localeCompare(b.name));
 
   const exportDataset = () => {
     const blob = new Blob(
@@ -122,48 +264,9 @@ export default function AdminPanel({
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Processes captured" value={processes.length} hint={`${classifiedSteps} classified steps`} accent="citron" />
-        <Stat label="Registered users" value={registeredUsers.length} hint="from spreadsheet profiles" accent="veil" />
         <Stat label="Dataset completeness" value={`${avgCompleteness}%`} hint={`threshold ${READINESS_THRESHOLD}% for next stage`} />
         <Stat label="Ready for next stage" value={ready.length} hint="processes at threshold" accent="veil" />
         <Stat label="Systems mapped" value={availableSystems.length} hint="in the master catalogue" />
-      </div>
-
-      <div className="card p-6">
-        <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <UsersRound size={15} className="text-veil-deep" /> Registered users
-        </h3>
-        {registeredUsers.length === 0 ? (
-          <p className="text-sm text-faint mt-3">No registered users synced yet.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto -mx-1 px-1">
-            <table className="w-full text-sm min-w-[520px]">
-              <thead className="text-left text-[11px] uppercase text-faint">
-                <tr>
-                  <th className="py-2 pr-4">Name</th>
-                  <th className="py-2 pr-4">Email</th>
-                  <th className="py-2 pr-4">Role</th>
-                  <th className="py-2 pr-4">Created</th>
-                  <th className="py-2 text-right">Processes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registeredUsers.map((user) => {
-                  const email = user.email || `${user.name.toLowerCase().replace(/\s+/g, '.')}@local`;
-                  const owned = processes.filter((p) => p.ownerEmail === email || p.ownerName === user.name).length;
-                  return (
-                    <tr key={email} className="border-t border-line">
-                      <td className="py-2 pr-4 font-medium">{user.name}</td>
-                      <td className="py-2 pr-4 text-mute">{email}</td>
-                      <td className="py-2 pr-4">{user.role}</td>
-                      <td className="py-2 pr-4 text-mute">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>
-                      <td className="py-2 text-right font-semibold">{owned}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
       {/* Transformation readiness */}
@@ -190,7 +293,7 @@ export default function AdminPanel({
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={systemsData} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 8 }}>
               <XAxis type="number" tick={{ fontSize: 10.5, fill: 'var(--color-mute)' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" width={118} tick={{ fontSize: 10.5, fill: 'var(--color-mute)' }} axisLine={{ stroke: 'var(--color-line)' }} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={135} tick={<CustomYAxisTick />} axisLine={{ stroke: 'var(--color-line)' }} tickLine={false} />
               <Tooltip
                 cursor={{ fill: 'rgba(23,23,28,0.04)' }}
                 contentStyle={TOOLTIP_STYLE}
@@ -225,6 +328,307 @@ export default function AdminPanel({
               </li>
             ))}
           </ol>
+        </div>
+      </div>
+
+      {/* System & Tool Configuration (AI Context Registry) */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-line">
+          <div>
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <Settings2 size={15} className="text-veil-deep" /> Systems &amp; Tools Registry
+            </h3>
+            <p className="text-xs text-mute mt-0.5">
+              Manage the employee tech stack context database. These descriptions feed directly into the AI engine to propose custom API integrations, agentic automation, and workflows.
+            </p>
+          </div>
+          <button
+            onClick={handleStartAddSystem}
+            className="btn-dark flex items-center gap-1.5 !py-1.5 !px-3.5 text-xs"
+          >
+            <Plus size={13} /> Add New System
+          </button>
+        </div>
+
+        {/* Add/Edit Inline Form (for adding new systems) */}
+        {editingSystemId === 'new' && (
+          <div className="bg-canvas border border-line rounded-2xl p-4 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between pb-2 border-b border-line/60">
+              <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
+                Add New System
+              </h4>
+              <button
+                onClick={handleCancelSystemEdit}
+                className="text-mute hover:text-ink cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs font-semibold" htmlFor="sys-name">System/Tool Name</label>
+                <input
+                  id="sys-name"
+                  type="text"
+                  className="field text-xs mt-1"
+                  placeholder="e.g. Workday HCM"
+                  value={systemNameInput}
+                  onChange={(e) => setSystemNameInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label text-xs font-semibold" htmlFor="sys-cat">Classification Category</label>
+                <select
+                  id="sys-cat"
+                  className="field cursor-pointer text-xs mt-1"
+                  value={systemCategoryInput}
+                  onChange={(e) => setSystemCategoryInput(e.target.value)}
+                >
+                  <option value="Enterprise Resource Planning (Financial Core)">ERP (Financial Core)</option>
+                  <option value="Procurement E-System">Procurement E-System</option>
+                  <option value="Tax Compliance Portal">Tax Compliance Portal</option>
+                  <option value="Clinical Data Layer">Clinical Data Layer</option>
+                  <option value="Insurance / Reinsurance Portal">Insurance / Reinsurance Portal</option>
+                  <option value="Corporate Banking Platform">Corporate Banking Platform</option>
+                  <option value="Analytics & Presentation Layer">Analytics & Presentation Layer</option>
+                  <option value="Custom System / Legacy App">Custom System / Legacy App</option>
+                  <option value="Other Productivity Tool">Other Productivity Tool</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="label text-xs font-semibold" htmlFor="sys-desc">
+                AI Context &amp; Capabilities (API interfaces, bottlenecks, data flow parameters)
+              </label>
+              <AutoTextarea
+                id="sys-desc"
+                className="field min-h-20 text-xs mt-1"
+                placeholder="Describe how this system operates, available API endpoints, manual bottlenecks, security restrictions, or how the AI should propose agentic and robotic solutions for it."
+                value={systemDescriptionInput}
+                onChange={(e) => setSystemDescriptionInput(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelSystemEdit}
+                className="btn-ghost !py-2 !px-4 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSystem}
+                className="btn-dark !py-2 !px-4 text-xs flex items-center gap-1.5"
+                disabled={!systemNameInput.trim()}
+              >
+                <Check size={14} /> Save System
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Search Filter */}
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+          <input
+            type="text"
+            className="field !pl-9 text-xs"
+            placeholder="Search systems, categories, or capabilities..."
+            value={systemSearchQuery}
+            onChange={(e) => setSystemSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* Systems List Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-line text-mute font-medium">
+                <th className="py-2.5 px-3">System Name</th>
+                <th className="py-2.5 px-3">Category</th>
+                <th className="py-2.5 px-3">AI Context &amp; Automation Hook</th>
+                <th className="py-2.5 px-3 text-center">Touch Count</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSystems.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-faint">
+                    No registered systems matched your search query.
+                  </td>
+                </tr>
+              ) : (
+                filteredSystems.map((sys) => {
+                  const touches = getProcessCountForSystem(sys.name);
+                  const isBeingEdited = editingSystemId === sys.id;
+                  const isBeingDeleted = systemToDelete?.id === sys.id;
+                  return (
+                    <Fragment key={sys.id}>
+                      <tr className={`border-b border-line/60 hover:bg-canvas-soft/30 transition-colors ${(isBeingEdited || isBeingDeleted) ? 'bg-veil-soft/10' : ''}`}>
+                        <td className="py-3 px-3 font-medium text-ink">{sys.name}</td>
+                        <td className="py-3 px-3">
+                          <span className="chip bg-veil-soft border-transparent text-veil-deep whitespace-nowrap text-[10px]">
+                            {sys.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-mute max-w-xs truncate" title={sys.description || 'No specific AI context provided.'}>
+                          {sys.description || (
+                            <span className="text-faint italic font-normal">
+                              No custom AI context defined. Proposing general integrations.
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`inline-flex items-center justify-center min-w-5 h-5 rounded-full px-1.5 text-[10px] font-bold ${touches > 0 ? 'bg-citron text-ink font-semibold' : 'bg-canvas text-faint border border-line'}`}>
+                            {touches}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleStartEditSystem(sys)}
+                              className={`w-7 h-7 rounded-full hover:bg-veil flex items-center justify-center transition-colors cursor-pointer ${isBeingEdited ? 'bg-citron text-ink font-semibold' : 'text-mute hover:text-ink'}`}
+                              title="Edit system config"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSystem(sys.id, sys.name)}
+                              className={`w-7 h-7 rounded-full hover:bg-bad/10 flex items-center justify-center transition-colors cursor-pointer ${isBeingDeleted ? 'bg-bad text-white' : 'text-mute hover:text-bad'}`}
+                              title="Delete system"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isBeingEdited && (
+                        <tr className="bg-canvas/50 border-b border-line/60 animate-fade-in">
+                          <td colSpan={5} className="py-4 px-4 bg-veil-soft/5">
+                            <div className="bg-canvas border border-line rounded-2xl p-4 space-y-4 shadow-sm">
+                              <div className="flex items-center justify-between pb-2 border-b border-line/60">
+                                <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
+                                  Edit "{sys.name}" Registry
+                                </h4>
+                                <button
+                                  onClick={handleCancelSystemEdit}
+                                  className="text-mute hover:text-ink cursor-pointer"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+
+                              <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="label text-xs font-semibold" htmlFor={`sys-name-${sys.id}`}>System/Tool Name</label>
+                                  <input
+                                    id={`sys-name-${sys.id}`}
+                                    type="text"
+                                    className="field text-xs mt-1"
+                                    placeholder="e.g. Workday HCM"
+                                    value={systemNameInput}
+                                    onChange={(e) => setSystemNameInput(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label text-xs font-semibold" htmlFor={`sys-cat-${sys.id}`}>Classification Category</label>
+                                  <select
+                                    id={`sys-cat-${sys.id}`}
+                                    className="field cursor-pointer text-xs mt-1"
+                                    value={systemCategoryInput}
+                                    onChange={(e) => setSystemCategoryInput(e.target.value)}
+                                  >
+                                    <option value="Enterprise Resource Planning (Financial Core)">ERP (Financial Core)</option>
+                                    <option value="Procurement E-System">Procurement E-System</option>
+                                    <option value="Tax Compliance Portal">Tax Compliance Portal</option>
+                                    <option value="Clinical Data Layer">Clinical Data Layer</option>
+                                    <option value="Insurance / Reinsurance Portal">Insurance / Reinsurance Portal</option>
+                                    <option value="Corporate Banking Platform">Corporate Banking Platform</option>
+                                    <option value="Analytics & Presentation Layer">Analytics & Presentation Layer</option>
+                                    <option value="Custom System / Legacy App">Custom System / Legacy App</option>
+                                    <option value="Other Productivity Tool">Other Productivity Tool</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="label text-xs font-semibold" htmlFor={`sys-desc-${sys.id}`}>
+                                  AI Context &amp; Capabilities (API interfaces, bottlenecks, data flow parameters)
+                                </label>
+                                <AutoTextarea
+                                  id={`sys-desc-${sys.id}`}
+                                  className="field min-h-20 text-xs mt-1"
+                                  placeholder="Describe how this system operates, available API endpoints, manual bottlenecks, security restrictions, or how the AI should propose agentic and robotic solutions for it."
+                                  value={systemDescriptionInput}
+                                  onChange={(e) => setSystemDescriptionInput(e.target.value)}
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-end gap-2.5 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelSystemEdit}
+                                  className="btn-ghost !py-2 !px-4 text-xs"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleSaveSystem}
+                                  className="btn-dark !py-2 !px-4 text-xs flex items-center gap-1.5"
+                                  disabled={!systemNameInput.trim()}
+                                >
+                                  <Check size={14} /> Save System
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {isBeingDeleted && (
+                        <tr className="bg-bad/5 border-b border-line/40 animate-fade-in">
+                          <td colSpan={5} className="py-4 px-4 bg-bad/5">
+                            <div className="bg-canvas border border-bad/30 rounded-2xl p-4 space-y-3 shadow-sm">
+                              <div className="flex items-start gap-2.5">
+                                <HelpCircle size={16} className="text-bad mt-0.5" />
+                                <div>
+                                  <h4 className="font-semibold text-xs text-ink">Delete "{systemToDelete.name}" from registry?</h4>
+                                  <p className="text-[11px] text-mute mt-1">
+                                    Are you sure you want to delete this system? Deleting it will remove its specific AI capabilities descriptions, although existing step records referencing its name will remain untouched.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setSystemToDelete(null)}
+                                  className="btn-ghost !py-1.5 !px-3.5 !text-[11px]"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={confirmDeleteSystem}
+                                  className="btn-dark !bg-bad hover:!bg-bad/90 !text-white !py-1.5 !px-3.5 !text-[11px]"
+                                >
+                                  Yes, Delete System
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -294,7 +698,7 @@ export default function AdminPanel({
               <>
                 <input id="adm-target" className="field" list="adm-emails" placeholder="person@company.com" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
                 <datalist id="adm-emails">
-                  {registeredUsers.map((u) => <option key={u.email || u.name} value={u.email || ''} />)}
+                  {MOCK_USERS.map((u) => <option key={u.id} value={u.email} />)}
                 </datalist>
               </>
             ) : (
@@ -308,7 +712,7 @@ export default function AdminPanel({
         </div>
         <div className="mt-3.5">
           <label className="label" htmlFor="adm-msg">Message</label>
-          <textarea id="adm-msg" className="field min-h-24" placeholder="What do you need from them?" value={message} onChange={(e) => setMessage(e.target.value)} />
+          <AutoTextarea id="adm-msg" className="field min-h-24" placeholder="What do you need from them?" value={message} onChange={(e) => setMessage(e.target.value)} />
         </div>
         <div className="mt-4 flex items-center justify-end gap-3">
           {sentFlash && <span className="text-xs font-semibold text-ok animate-fade-up">Sent — logged in broadcast history ✓</span>}

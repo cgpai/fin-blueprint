@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ArrowRight, CloudUpload, FileText, Plus, X } from 'lucide-react';
 import { WorkingOutput } from '../../types';
 import { uid } from '../../lib/utils';
+import { AutoTextarea } from '../ui';
 
 const ACCEPTED = ['.txt', '.md', '.csv', '.json', '.log'];
 
@@ -120,7 +121,7 @@ export default function UploadOutputs({
 
       {pasteOpen && (
         <div className="mt-3 animate-fade-up">
-          <textarea
+          <AutoTextarea
             autoFocus
             className="field min-h-28 resize-y"
             placeholder="Paste an excerpt of a report, checklist or handover note…"

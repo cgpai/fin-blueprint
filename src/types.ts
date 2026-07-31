@@ -58,7 +58,13 @@ export interface Process {
   volumeRating?: number; // 1-5
   errorSensitivityRating?: number; // 1-5
   automationSuitability?: number; // 0-100 score
+  category?: string;
+  isCandidateForAI?: boolean;
+  problemStatement?: string;
+  aiOpportunity?: string;
   userOverrides?: Record<string, 'agentic-ai' | 'automation' | 'human-in-the-loop'>; // stepId -> classification
+  manualRoleOverride?: string; // Dedicated role field for raw manual user input (bypassing AI/validation)
+  savedDeploymentPlan?: DeploymentPlan;
 }
 
 export interface User {
@@ -112,6 +118,7 @@ export interface SystemItem {
   name: string;
   category: string;
   processCount: number;
+  description?: string;
 }
 
 /* ---------- Onboarding / journey (new UX flow) ---------- */
@@ -122,6 +129,7 @@ export interface UserProfile {
   role: Persona;
   passwordHash: string; // SHA-256 hex, local-only "re-access" gate
   createdAt: string;
+  manualRoleOverride?: string; // Dedicated role field for raw manual user input (bypassing AI/validation)
 }
 
 export type AppPhase = 'landing' | 'onboarding' | 'locked' | 'journey' | 'workspace';
@@ -138,6 +146,7 @@ export interface DraftProcess {
   steps: ProcessStep[];
   isShared: boolean;
   taggedUsers: string[];
+  manualRoleOverride?: string; // Dedicated role field for raw manual user input (bypassing AI/validation)
 }
 
 /** A working-output document the user uploads/pastes before AI mining. */
@@ -171,7 +180,7 @@ export interface MinedProcess {
 }
 
 /**
- * Browser mining result — one free-text dump segmented into N distinct
+ * Response of POST /api/ai/mine — one free-text dump segmented into N distinct
  * processes, each with its own structured steps.
  */
 export interface MiningResult {
@@ -180,8 +189,10 @@ export interface MiningResult {
   processes: MinedProcess[];
 }
 
-/** Browser analysis result — refinement + classification + suitability. */
+/** Response of POST /api/ai/analyze — refinement + classification + suitability. */
 export interface AnalysisResult {
+  refinedTitle?: string;
+  refinedDescription?: string;
   refinedSteps: Array<{
     order: number;
     name: string;
@@ -202,3 +213,131 @@ export interface AnalysisResult {
   };
   recommendedAction: string;
 }
+
+export interface DeploymentPlanStep {
+  phase: string;
+  title: string;
+  description: string;
+  systemsInvolved: string[];
+  actionItems: string[];
+}
+
+export interface CostBenefitAnalysis {
+  estimatedDevelopmentHours: number;
+  developmentCostUSD: number;
+  annualSubscriptionCostUSD: number;
+  estimatedAnnualSavingsUSD: number;
+  paybackPeriodMonths: number;
+  roiPercent: number;
+  manualHoursReducedPerMonth: number;
+}
+
+export interface ToolSubscription {
+  toolName: string;
+  monthlyCostUSD: number;
+  linkedKeyActivity: string;
+}
+
+export interface StrategicPartnership {
+  partnerName: string;
+  roleDescription: string;
+  benefitsCaptured: string;
+}
+
+export interface DeploymentPlan {
+  processTitle: string;
+  recommendedSolutionType: 'RPA / Automation' | 'Agentic AI' | 'Hybrid System';
+  deploymentSteps: DeploymentPlanStep[];
+  costBenefitAnalysis: CostBenefitAnalysis;
+  additionalSubscriptions: ToolSubscription[];
+  strategicPartnerships: StrategicPartnership[];
+}
+
+// ---------- Project Management Models (Stages 4 to 6) ----------
+export type ProjectStage = '4: Locked Project' | '5: Tracked Execution' | '6: Realised Benefit';
+
+export interface TeamMember {
+  id: string;
+  projectId: string;
+  name: string;
+  email: string;
+  role: 'Lead' | 'Contributor' | 'Stakeholder';
+  addedBy?: string;
+}
+
+export interface MeetingTranscript {
+  id: string;
+  projectId: string;
+  date: string;
+  title: string;
+  participants: string[];
+  source: 'upload' | 'paste' | 'mic';
+  rawText: string;
+  fileName?: string;
+}
+
+export interface ActionItem {
+  id: string;
+  meetingNoteId?: string;
+  description: string;
+  assigneeName: string;
+  assigneeEmail: string;
+  dueDate: string;
+  status: 'pending' | 'sent' | 'acknowledged';
+}
+
+export interface MeetingNote {
+  id: string;
+  projectId: string;
+  transcriptId: string;
+  summary: string;
+  decisions: string[];
+  openQuestions: string[];
+  actionItems: ActionItem[];
+  isFinalized: boolean;
+  createdAt: string;
+}
+
+export interface GanttTask {
+  id: string;
+  projectId: string;
+  label: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  dependsOnId?: string | null;
+  progress: number; // 0-100
+  owner?: string;
+  deliverableUrl?: string;
+  notes?: string;
+}
+
+export interface KeyResult {
+  id: string;
+  label: string;
+  target: number;
+  current: number;
+  unit: string;
+}
+
+export interface ProjectOKR {
+  id: string;
+  projectId: string;
+  objective: string;
+  parentOkrLabel: string;
+  keyResults: KeyResult[];
+}
+
+export interface ManagedProject {
+  id: string;
+  title: string;
+  targetStatement: string;
+  linkedProcessId?: string;
+  linkedEngineTitle?: string;
+  ownerName: string;
+  ownerEmail: string;
+  stage: ProjectStage;
+  progressPercent: number;
+  targetDate: string;
+}
+
+

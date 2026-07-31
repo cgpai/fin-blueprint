@@ -17,8 +17,10 @@ interface SpeechRecognitionLike {
  */
 export function useSpeech(onChunk: (text: string) => void) {
   const [listening, setListening] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const onChunkRef = useRef(onChunk);
   onChunkRef.current = onChunk;
 
@@ -31,38 +33,92 @@ export function useSpeech(onChunk: (text: string) => void) {
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
-  const start = () => {
-    if (!SpeechRecognitionCtor || listening) return;
+  const start = async () => {
+    if (!SpeechRecognitionCtor || listening || loading) return;
     setError(null);
-    const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
-    recognition.lang = 'en-US';
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          onChunkRef.current(result[0].transcript.trim() + ' ');
-        }
+    setLoading(true);
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
       }
-    };
-    recognition.onerror = (event: any) => {
-      setError(event?.error === 'not-allowed' ? 'Microphone access was blocked.' : 'Speech recognition hiccup — try again.');
+    } catch (err: any) {
+      console.warn('getUserMedia permission request failed:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Microphone access was blocked. Please enable it in your browser settings.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      
+      recognition.onresult = (event: any) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            onChunkRef.current(result[0].transcript.trim() + ' ');
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error event:', event);
+        const errType = event?.error;
+        if (errType === 'not-allowed') {
+          setError('Microphone access was blocked.');
+        } else if (errType === 'no-speech') {
+          setError('No speech detected. Speak clearly.');
+        } else if (errType === 'network') {
+          setError('Network error occurred during speech recognition.');
+        } else {
+          setError(`Speech recognition issue (${errType || 'unknown'}) — try again.`);
+        }
+        setListening(false);
+        setLoading(false);
+      };
+
+      recognition.onend = () => {
+        setListening(false);
+        setLoading(false);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      setListening(true);
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err);
+      setError('Could not initialize speech recognition. Try refreshing or using Chrome.');
+      setLoading(false);
       setListening(false);
-    };
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setListening(true);
+    }
   };
 
   const stop = () => {
     recognitionRef.current?.stop();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
     setListening(false);
+    setLoading(false);
   };
 
-  return { supported, listening, error, start, stop };
+  return { supported, listening, loading, error, start, stop };
 }

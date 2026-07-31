@@ -1,20 +1,29 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
-import { Plus } from 'lucide-react';
+import { Plus, ArrowLeftRight } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import Sidebar from './Sidebar';
 import ProcessCatalogue from './ProcessCatalogue';
 import AIRefinementPanel from './AIRefinementPanel';
+import PRDHub from './PRDHub';
 import DashboardCFO from './DashboardCFO';
 import DashboardManager from './DashboardManager';
 import AdminPanel from './AdminPanel';
 import NotificationCenter from './NotificationCenter';
+import ProjectManagement from './ProjectManagement';
+import LocalDataHub from './LocalDataHub';
 import { Avatar } from './ui';
 import {
+  GanttTask,
   ImprovementItem,
+  ManagedProject,
+  MeetingNote,
+  MeetingTranscript,
   NotificationLog,
   Persona,
   Process,
+  ProjectOKR,
   SystemItem,
+  TeamMember,
   UserNotification,
   UserProfile,
 } from '../types';
@@ -29,10 +38,16 @@ export default function Workspace({
   clearFocusProcess,
   processes,
   availableSystems,
-  registeredProfiles,
+  onUpdateSystems,
   notifications,
   adminBroadcastLogs,
   improvementItems,
+  projectsManaged = [],
+  teamMembers = [],
+  transcripts = [],
+  meetingNotes = [],
+  ganttTasks = [],
+  projectOkrs = [],
   onSaveProcess,
   onDeleteProcess,
   onAddSystem,
@@ -42,8 +57,20 @@ export default function Workspace({
   onTriggerAdminNotification,
   onAddImprovementItem,
   onUpdateImprovementItem,
+  onUpdateProject,
+  onAddProject,
+  onAddTeamMember,
+  onRemoveTeamMember,
+  onAddTranscript,
+  onAddMeetingNote,
+  onUpdateMeetingNote,
+  onUpdateActionItemStatus,
+  onAddGanttTask,
+  onUpdateGanttTask,
+  onUpdateOkrKeyResult,
   onCaptureNew,
   onLock,
+  onImportData,
 }: {
   profile: UserProfile;
   currentPersona: Persona;
@@ -53,10 +80,16 @@ export default function Workspace({
   clearFocusProcess: () => void;
   processes: Process[];
   availableSystems: SystemItem[];
-  registeredProfiles: UserProfile[];
+  onUpdateSystems: (systems: SystemItem[]) => void;
   notifications: UserNotification[];
   adminBroadcastLogs: NotificationLog[];
   improvementItems: ImprovementItem[];
+  projectsManaged?: ManagedProject[];
+  teamMembers?: TeamMember[];
+  transcripts?: MeetingTranscript[];
+  meetingNotes?: MeetingNote[];
+  ganttTasks?: GanttTask[];
+  projectOkrs?: ProjectOKR[];
   onSaveProcess: (process: Process) => void;
   onDeleteProcess: (id: string) => void;
   onAddSystem: (name: string) => void;
@@ -66,14 +99,36 @@ export default function Workspace({
   onTriggerAdminNotification: (subject: string, msg: string, type: 'individual' | 'level' | 'subfunction' | 'all', val: string) => void;
   onAddImprovementItem: (item: ImprovementItem) => void;
   onUpdateImprovementItem: (item: ImprovementItem) => void;
+  onUpdateProject?: (proj: ManagedProject) => void;
+  onAddProject?: (proj: ManagedProject) => void;
+  onAddTeamMember?: (member: TeamMember) => void;
+  onRemoveTeamMember?: (memberId: string) => void;
+  onAddTranscript?: (tr: MeetingTranscript) => void;
+  onAddMeetingNote?: (note: MeetingNote) => void;
+  onUpdateMeetingNote?: (note: MeetingNote) => void;
+  onUpdateActionItemStatus?: (noteId: string, itemId: string, status: 'pending' | 'sent' | 'acknowledged') => void;
+  onAddGanttTask?: (task: GanttTask) => void;
+  onUpdateGanttTask?: (task: GanttTask) => void;
+  onUpdateOkrKeyResult?: (okrId: string, krId: string, currentVal: number) => void;
   onCaptureNew: () => void;
   onLock: () => void;
+  onImportData: (
+    data: {
+      processes?: Process[];
+      systems?: SystemItem[];
+      profile?: UserProfile;
+      improvementItems?: ImprovementItem[];
+      notifications?: UserNotification[];
+      adminBroadcastLogs?: NotificationLog[];
+    },
+    mode: 'merge' | 'overwrite'
+  ) => void;
 }) {
   const [currentTab, setCurrentTab] = useState(initialTab);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [selectedViewProcess, setSelectedViewProcess] = useState<Process | null>(
     () => (focusProcessId && initialTab === 'catalogue' ? processes.find((p) => p.id === focusProcessId) ?? null : null),
   );
+  const [showDataHub, setShowDataHub] = useState(false);
 
   // Keep the open detail view in sync when a process is updated elsewhere.
   useEffect(() => {
@@ -114,6 +169,7 @@ export default function Workspace({
             steps: process.steps,
             isShared: process.isShared,
             taggedUsers: process.taggedUsers,
+            manualRoleOverride: process.manualRoleOverride,
           },
         ],
       }),
@@ -127,31 +183,8 @@ export default function Workspace({
     ? Math.round(processes.reduce((sum, p) => sum + p.completenessScore, 0) / processes.length)
     : 0;
 
-  const handleLogout = () => {
-    setLoggingOut(true);
-    setTimeout(onLock, 900);
-  };
-
   return (
-    <div className="flex flex-col md:flex-row h-dvh w-full overflow-hidden canvas-wash">
-      {loggingOut && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 backdrop-blur-md px-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
-            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-            transition={{ duration: 0.28 }}
-            className="glass rounded-card px-8 py-7 text-center"
-          >
-            <motion.div
-              animate={{ opacity: [0.25, 1, 0.25], scale: [0.95, 1.05, 0.95] }}
-              transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-              className="mx-auto w-14 h-14 rounded-full bg-white/60 border border-white/70 shadow-lift"
-            />
-            <div className="font-display text-lg font-semibold mt-4">Logging out</div>
-            <div className="text-xs text-mute mt-1">Clearing your session...</div>
-          </motion.div>
-        </div>
-      )}
+    <div className="flex h-screen w-screen overflow-hidden canvas-wash print:h-auto print:w-auto print:overflow-visible bg-white print:bg-white">
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={(tab) => {
@@ -162,19 +195,20 @@ export default function Workspace({
         setPersona={handlePersonaChange}
         unreadNotifications={unreadCount}
         onCaptureNew={onCaptureNew}
-        onLock={handleLogout}
+        onLock={onLock}
+        profileRole={profile.role}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 order-first md:order-none">
+      <div className="flex-1 flex flex-col min-w-0 print:h-auto print:overflow-visible">
         {/* Header */}
-        <header className="app-header px-4 sm:px-6 md:px-10 pt-5 sm:pt-7 pb-2 flex items-start sm:items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-light tracking-tight truncate">
+        <header className="app-header px-6 md:px-10 pt-7 pb-2 flex items-end justify-between gap-4 flex-wrap print:pb-6 print:border-b print:border-line">
+          <div>
+            <h1 className="font-display text-3xl md:text-4xl font-light tracking-tight">
               {greeting()}, <span className="font-semibold">{profile.name.split(' ')[0]}!</span>
             </h1>
-            <p className="text-xs sm:text-sm text-mute mt-1 hidden sm:block">Let&rsquo;s make the way you work visible.</p>
+            <p className="text-sm text-mute mt-1">Let&rsquo;s make the way you work visible.</p>
           </div>
-          <div className="flex items-center gap-2 sm:gap-5 shrink-0">
+          <div className="flex items-center gap-5 print:hidden">
             <div className="text-right hidden sm:block">
               <div className="text-[11px] font-semibold text-mute">Processes documented</div>
               <div className="font-display text-2xl font-semibold leading-tight">
@@ -187,18 +221,26 @@ export default function Workspace({
               <div className="font-display text-2xl font-semibold leading-tight">{avgCompleteness}%</div>
             </div>
             {currentPersona !== 'Admin' && (
-              <button onClick={onCaptureNew} className="btn-dark !px-3 !py-2.5 sm:!px-5" aria-label="Capture process">
-                <Plus size={16} />
-                <span className="hidden sm:inline">Capture process</span>
+              <button onClick={onCaptureNew} className="btn-dark print:hidden">
+                <Plus size={16} /> Capture process
               </button>
             )}
-            <Avatar name={profile.name} size={36} />
+            <button
+              onClick={() => setShowDataHub(true)}
+              className="btn-ghost flex items-center gap-2 !py-2.5 !px-3 print:hidden"
+              title="Transfer local data (Import/Export)"
+              aria-label="Transfer local data (Import/Export)"
+            >
+              <ArrowLeftRight size={15} />
+              <span className="hidden sm:inline">Transfer Data</span>
+            </button>
+            <Avatar name={profile.name} size={42} />
           </div>
         </header>
 
-        {/* Main content — bottom pad clears fixed mobile nav */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-10 py-4 sm:py-6">
-          <div className="max-w-6xl mx-auto space-y-6 pb-24 md:pb-10">
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto px-6 md:px-10 py-6 print:h-auto print:overflow-visible">
+          <div className="max-w-6xl mx-auto space-y-6 pb-10">
             {currentTab === 'dashboard' &&
               (currentPersona === 'L3' ? (
                 <DashboardManager
@@ -213,6 +255,9 @@ export default function Workspace({
                   processes={processes}
                   currentPersona={currentPersona}
                   improvementItems={improvementItems}
+                  managedProjects={projectsManaged}
+                  onUpdateProject={onUpdateProject}
+                  onNavigateToProject={() => setCurrentTab('projects')}
                   onSelectProcess={(proc) => {
                     setSelectedViewProcess(proc);
                     setCurrentTab('catalogue');
@@ -223,6 +268,7 @@ export default function Workspace({
             {currentTab === 'catalogue' && (
               <ProcessCatalogue
                 processes={processes}
+                availableSystems={availableSystems}
                 selectedViewProcess={selectedViewProcess}
                 onSelectProcess={setSelectedViewProcess}
                 onEditProcess={handleEditProcess}
@@ -234,13 +280,20 @@ export default function Workspace({
                 }}
                 currentPersona={currentPersona}
                 profileName={profile.name}
+                profileRole={profile.role}
                 onCreateNew={onCaptureNew}
+                onSaveProcess={onSaveProcess}
               />
+            )}
+
+            {currentTab === 'prd_hub' && (
+              <PRDHub processes={processes} />
             )}
 
             {currentTab === 'refinement' && (
               <AIRefinementPanel
                 processes={processes}
+                availableSystems={availableSystems}
                 focusProcessId={focusProcessId}
                 clearFocusProcess={clearFocusProcess}
                 onUpdateProcess={(updated) => {
@@ -250,13 +303,39 @@ export default function Workspace({
               />
             )}
 
-            {currentTab === 'notifications' && (
-              <NotificationCenter
+            {(currentTab === 'notifications' || currentTab === 'projects') && (
+              <ProjectManagement
+                projects={projectsManaged}
+                catalogueProcesses={processes}
+                teamMembers={teamMembers}
+                transcripts={transcripts}
+                meetingNotes={meetingNotes}
+                ganttTasks={ganttTasks}
+                projectOkrs={projectOkrs}
                 notifications={notifications}
-                logs={adminBroadcastLogs}
-                onMarkRead={onMarkRead}
-                onActionNotification={onActionNotification}
                 currentPersona={currentPersona}
+                profileName={profile.name}
+                profileEmail={profile.email}
+                onUpdateProject={onUpdateProject || (() => {})}
+                onAddProject={onAddProject || (() => {})}
+                onAddTeamMember={onAddTeamMember || (() => {})}
+                onRemoveTeamMember={onRemoveTeamMember || (() => {})}
+                onAddTranscript={onAddTranscript || (() => {})}
+                onAddMeetingNote={onAddMeetingNote || (() => {})}
+                onUpdateMeetingNote={onUpdateMeetingNote || (() => {})}
+                onUpdateActionItemStatus={onUpdateActionItemStatus || (() => {})}
+                onAddGanttTask={onAddGanttTask || (() => {})}
+                onUpdateGanttTask={onUpdateGanttTask || (() => {})}
+                onUpdateOkrKeyResult={onUpdateOkrKeyResult || (() => {})}
+                onMarkNotificationRead={onMarkRead}
+                onActionNotification={onActionNotification}
+                onNavigateToCatalogue={(procId) => {
+                  if (procId) {
+                    const found = processes.find((p) => p.id === procId);
+                    if (found) setSelectedViewProcess(found);
+                  }
+                  setCurrentTab('catalogue');
+                }}
               />
             )}
 
@@ -264,7 +343,7 @@ export default function Workspace({
               <AdminPanel
                 processes={processes}
                 availableSystems={availableSystems}
-                registeredProfiles={registeredProfiles}
+                onUpdateSystems={onUpdateSystems}
                 improvementItems={improvementItems}
                 onTriggerAdminNotification={onTriggerAdminNotification}
               />
@@ -272,6 +351,21 @@ export default function Workspace({
           </div>
         </main>
       </div>
+
+      <AnimatePresence>
+        {showDataHub && (
+          <LocalDataHub
+            profile={profile}
+            processes={processes}
+            availableSystems={availableSystems}
+            improvementItems={improvementItems}
+            notifications={notifications}
+            adminBroadcastLogs={adminBroadcastLogs}
+            onImportComplete={onImportData}
+            onClose={() => setShowDataHub(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

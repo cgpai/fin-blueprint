@@ -7,11 +7,17 @@ import Workspace from './components/Workspace';
 
 import {
   AppPhase,
+  GanttTask,
   ImprovementItem,
+  ManagedProject,
+  MeetingNote,
+  MeetingTranscript,
   NotificationLog,
   Persona,
   Process,
+  ProjectOKR,
   SystemItem,
+  TeamMember,
   UserNotification,
   UserProfile,
 } from './types';
@@ -22,19 +28,29 @@ import {
   MOCK_NOTIFICATION_LOGS,
   MOCK_IMPROVEMENT_ITEMS,
 } from './data/mockData';
+import {
+  INITIAL_MANAGED_PROJECTS,
+  INITIAL_TEAM_MEMBERS,
+  INITIAL_TRANSCRIPTS,
+  INITIAL_MEETING_NOTES,
+  INITIAL_GANTT_TASKS,
+  INITIAL_PROJECT_OKRS,
+} from './data/projectData';
 import { uid } from './lib/utils';
-import { AppSnapshot, loadSnapshot, saveSnapshot, spreadsheetEnabled } from './lib/spreadsheetDb';
 
 const STORAGE = {
   profile: 'bp_profile',
   phase: 'bp_phase',
-  // v3: drop cached mock demo rows so Sheets reset is not re-uploaded from localStorage
-  processes: 'bp_processes_v3',
-  systems: 'bp_systems_v3',
+  processes: 'bp_processes',
+  systems: 'bp_systems',
   unlocked: 'bp_unlocked', // sessionStorage — cleared when the browser tab closes
+  projects: 'bp_projects',
+  teamMembers: 'bp_team_members',
+  transcripts: 'bp_transcripts',
+  meetingNotes: 'bp_meeting_notes',
+  ganttTasks: 'bp_gantt_tasks',
+  projectOkrs: 'bp_project_okrs',
 } as const;
-
-const emptyWhenSheets = <T,>(fallback: T): T => (spreadsheetEnabled ? ([] as unknown as T) : fallback);
 
 function loadJSON<T>(key: string, fallback: T): T {
   try {
@@ -45,21 +61,26 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
-/** Admin / super-admin runs the programme — never the staff capture journey. */
-function homeForRole(role: Persona, savedPhase?: string | null): { phase: AppPhase; tab: string } {
-  if (role === 'Admin') return { phase: 'workspace', tab: 'admin' };
-  if (savedPhase === 'workspace') return { phase: 'workspace', tab: role === 'L4' ? 'catalogue' : 'dashboard' };
-  return { phase: 'journey', tab: 'dashboard' };
-}
-
 export default function App() {
-  const [profile, setProfile] = useState<UserProfile | null>(() => loadJSON<UserProfile | null>(STORAGE.profile, null));
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
+    if (loaded) {
+      const isNicole = loaded.name.toLowerCase().includes('nicole') || (loaded.email || '').toLowerCase().includes('nicole');
+      if (isNicole && loaded.role !== 'Admin') {
+        loaded.role = 'Admin';
+        localStorage.setItem(STORAGE.profile, JSON.stringify(loaded));
+      }
+    }
+    return loaded;
+  });
 
   const [phase, setPhase] = useState<AppPhase>(() => {
     const saved = loadJSON<UserProfile | null>(STORAGE.profile, null);
     if (!saved) return 'landing';
     if (sessionStorage.getItem(STORAGE.unlocked) !== 'true') return 'locked';
-    return homeForRole(saved.role, localStorage.getItem(STORAGE.phase)).phase;
+    if (saved.role === 'Admin') return 'workspace';
+    const savedPhase = localStorage.getItem(STORAGE.phase);
+    return savedPhase === 'journey' || savedPhase === 'workspace' ? savedPhase : 'journey';
   });
 
   // Which workspace tab to open when entering the workspace (recap choices route here)
@@ -69,47 +90,39 @@ export default function App() {
   });
   const [focusProcessId, setFocusProcessId] = useState<string | null>(null);
 
-  const [currentPersona, setCurrentPersona] = useState<Persona>(() => loadJSON<UserProfile | null>(STORAGE.profile, null)?.role ?? 'L4');
+  const [currentPersona, setCurrentPersona] = useState<Persona>(() => {
+    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
+    if (loaded) {
+      const isNicole = loaded.name.toLowerCase().includes('nicole') || (loaded.email || '').toLowerCase().includes('nicole');
+      if (isNicole) return 'Admin';
+      return loaded.role;
+    }
+    return 'L4';
+  });
 
-  // ---------- Data layer (Sheets = source of truth in prod; mocks only for local-only) ----------
-  const [processes, setProcesses] = useState<Process[]>(() => loadJSON(STORAGE.processes, emptyWhenSheets(MOCK_PROCESSES)));
-  const [availableSystems, setAvailableSystems] = useState<SystemItem[]>(() => loadJSON(STORAGE.systems, emptyWhenSheets(MOCK_SYSTEMS)));
-  const [notifications, setNotifications] = useState<UserNotification[]>(() => emptyWhenSheets(MOCK_NOTIFICATIONS));
-  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(() => emptyWhenSheets(MOCK_NOTIFICATION_LOGS));
-  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => emptyWhenSheets(MOCK_IMPROVEMENT_ITEMS));
-  const [registeredProfiles, setRegisteredProfiles] = useState<UserProfile[]>([]);
-  const [remoteReady, setRemoteReady] = useState(!spreadsheetEnabled);
+  // ---------- Data layer (local-first, mock-seeded) ----------
+  const [processes, setProcesses] = useState<Process[]>(() => {
+    const loaded = loadJSON<Process[]>(STORAGE.processes, MOCK_PROCESSES);
+    if (!loaded.some(p => p.id === 'proc-ai-reconciliation')) {
+      const target = MOCK_PROCESSES.find(p => p.id === 'proc-ai-reconciliation');
+      if (target) {
+        return [target, ...loaded];
+      }
+    }
+    return loaded;
+  });
+  const [availableSystems, setAvailableSystems] = useState<SystemItem[]>(() => loadJSON(STORAGE.systems, MOCK_SYSTEMS));
+  const [notifications, setNotifications] = useState<UserNotification[]>(MOCK_NOTIFICATIONS);
+  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(MOCK_NOTIFICATION_LOGS);
+  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(MOCK_IMPROVEMENT_ITEMS);
 
-  useEffect(() => {
-    if (!spreadsheetEnabled) return;
-    loadSnapshot()
-      .then((remote) => {
-        if (!remote) return;
-        const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
-        if (profile?.role === 'Admin') {
-          localStorage.setItem(STORAGE.phase, 'workspace');
-          if (sessionStorage.getItem(STORAGE.unlocked) === 'true') {
-            setWorkspaceTab('admin');
-            setPhase('workspace');
-          } else {
-            setPhase('locked');
-          }
-        } else if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') {
-          setPhase('locked');
-        } else if (remotePhase && profile) {
-          localStorage.setItem(STORAGE.phase, remotePhase);
-          setPhase(remotePhase);
-        }
-        if (Array.isArray(remote.processes)) setProcesses(remote.processes);
-        if (Array.isArray(remote.systems)) setAvailableSystems(remote.systems);
-        if (Array.isArray(remote.notifications)) setNotifications(remote.notifications);
-        if (Array.isArray(remote.adminBroadcastLogs)) setAdminBroadcastLogs(remote.adminBroadcastLogs);
-        if (Array.isArray(remote.improvementItems)) setImprovementItems(remote.improvementItems);
-        if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
-      })
-      .catch((err) => console.error('Spreadsheet sync load failed:', err))
-      .finally(() => setRemoteReady(true));
-  }, []);
+  // ---------- Project Management state ----------
+  const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, INITIAL_MANAGED_PROJECTS));
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadJSON(STORAGE.teamMembers, INITIAL_TEAM_MEMBERS));
+  const [transcripts, setTranscripts] = useState<MeetingTranscript[]>(() => loadJSON(STORAGE.transcripts, INITIAL_TRANSCRIPTS));
+  const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(() => loadJSON(STORAGE.meetingNotes, INITIAL_MEETING_NOTES));
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() => loadJSON(STORAGE.ganttTasks, INITIAL_GANTT_TASKS));
+  const [projectOkrs, setProjectOkrs] = useState<ProjectOKR[]>(() => loadJSON(STORAGE.projectOkrs, INITIAL_PROJECT_OKRS));
 
   useEffect(() => {
     localStorage.setItem(STORAGE.processes, JSON.stringify(processes));
@@ -120,11 +133,36 @@ export default function App() {
   }, [availableSystems]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE.projects, JSON.stringify(managedProjects));
+  }, [managedProjects]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE.teamMembers, JSON.stringify(teamMembers));
+  }, [teamMembers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE.transcripts, JSON.stringify(transcripts));
+  }, [transcripts]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE.meetingNotes, JSON.stringify(meetingNotes));
+  }, [meetingNotes]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE.ganttTasks, JSON.stringify(ganttTasks));
+  }, [ganttTasks]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE.projectOkrs, JSON.stringify(projectOkrs));
+  }, [projectOkrs]);
+
+  useEffect(() => {
     if (phase === 'journey' || phase === 'workspace') {
       localStorage.setItem(STORAGE.phase, phase);
     }
   }, [phase]);
 
+  // Super-admin runs the programme — never the staff capture journey.
   useEffect(() => {
     if (profile?.role === 'Admin' && phase === 'journey') {
       setWorkspaceTab('admin');
@@ -132,68 +170,34 @@ export default function App() {
     }
   }, [profile, phase]);
 
-  useEffect(() => {
-    if (!spreadsheetEnabled || !remoteReady) return;
-    const persistedPhase = phase === 'journey' || phase === 'workspace' ? phase : localStorage.getItem(STORAGE.phase);
-    const snapshot: AppSnapshot = {
-      profile,
-      profiles: Object.fromEntries(
-        [
-          ...registeredProfiles,
-          ...(profile ? [profile] : []),
-        ].map((p) => [(p.email || p.name).trim().toLowerCase(), p]),
-      ),
-      phase: persistedPhase === 'journey' || persistedPhase === 'workspace' ? persistedPhase : null,
-      processes,
-      systems: availableSystems,
-      notifications,
-      adminBroadcastLogs,
-      improvementItems,
-    };
-    const timer = window.setTimeout(() => {
-      saveSnapshot(snapshot).catch((err) => console.error('Spreadsheet sync save failed:', err));
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady]);
-
   // ---------- Phase transitions ----------
-  const enterApp = (nextProfile: UserProfile) => {
-    const home = homeForRole(nextProfile.role, localStorage.getItem(STORAGE.phase));
-    localStorage.setItem(STORAGE.profile, JSON.stringify(nextProfile));
-    localStorage.setItem(STORAGE.phase, home.phase);
-    sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(nextProfile);
-    setCurrentPersona(nextProfile.role);
-    setWorkspaceTab(home.tab);
-    setPhase(home.phase);
-  };
-
   const handleOnboardingComplete = (newProfile: UserProfile) => {
-    setRegisteredProfiles((prev) => {
-      const key = (newProfile.email || newProfile.name).trim().toLowerCase();
-      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), newProfile];
-    });
-    enterApp(newProfile);
-  };
-
-  const handleExistingLogin = (existingProfile: UserProfile) => {
-    enterApp(existingProfile);
-  };
-
-  const handleUpdateRegisteredProfile = (updatedProfile: UserProfile) => {
-    setRegisteredProfiles((prev) => {
-      const key = (updatedProfile.email || updatedProfile.name).trim().toLowerCase();
-      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), updatedProfile];
-    });
-    if ((profile?.email || profile?.name || '').trim().toLowerCase() === (updatedProfile.email || updatedProfile.name).trim().toLowerCase()) {
-      localStorage.setItem(STORAGE.profile, JSON.stringify(updatedProfile));
-      setProfile(updatedProfile);
+    localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
+    sessionStorage.setItem(STORAGE.unlocked, 'true');
+    setProfile(newProfile);
+    setCurrentPersona(newProfile.role);
+    if (newProfile.role === 'Admin') {
+      setWorkspaceTab('admin');
+      setPhase('workspace');
+    } else {
+      setPhase('journey');
     }
   };
 
-  const handleUnlock = () => {
-    if (!profile) return;
-    enterApp(profile);
+  const handleUnlock = (updatedProfile?: UserProfile) => {
+    const next = updatedProfile || profile;
+    if (updatedProfile) {
+      localStorage.setItem(STORAGE.profile, JSON.stringify(updatedProfile));
+      setProfile(updatedProfile);
+    }
+    sessionStorage.setItem(STORAGE.unlocked, 'true');
+    if (next?.role === 'Admin') {
+      setWorkspaceTab('admin');
+      setPhase('workspace');
+      return;
+    }
+    const savedPhase = localStorage.getItem(STORAGE.phase);
+    setPhase(savedPhase === 'workspace' ? 'workspace' : 'journey');
   };
 
   const handleStartOver = () => {
@@ -202,6 +206,11 @@ export default function App() {
     sessionStorage.removeItem(STORAGE.unlocked);
     setProfile(null);
     setPhase('landing');
+  };
+
+  const handleLock = () => {
+    sessionStorage.removeItem(STORAGE.unlocked);
+    setPhase('locked');
   };
 
   // ---------- Process actions ----------
@@ -290,21 +299,185 @@ export default function App() {
     setImprovementItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
   };
 
+  // ---------- Project Management actions ----------
+  const handleUpdateProject = (updated: ManagedProject) => {
+    setManagedProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  };
+
+  const handleAddProject = (newProj: ManagedProject) => {
+    setManagedProjects((prev) => [newProj, ...prev]);
+  };
+
+  const handleAddTeamMember = (member: TeamMember) => {
+    setTeamMembers((prev) => [...prev, member]);
+  };
+
+  const handleRemoveTeamMember = (memberId: string) => {
+    setTeamMembers((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
+  const handleAddTranscript = (tr: MeetingTranscript) => {
+    setTranscripts((prev) => [tr, ...prev]);
+  };
+
+  const handleAddMeetingNote = (note: MeetingNote) => {
+    setMeetingNotes((prev) => [note, ...prev]);
+  };
+
+  const handleUpdateMeetingNote = (note: MeetingNote) => {
+    setMeetingNotes((prev) => prev.map((n) => (n.id === note.id ? note : n)));
+  };
+
+  const handleUpdateActionItemStatus = (noteId: string, itemId: string, status: 'pending' | 'sent' | 'acknowledged') => {
+    setMeetingNotes((prev) =>
+      prev.map((note) => {
+        if (note.id !== noteId) return note;
+        return {
+          ...note,
+          actionItems: note.actionItems.map((item) => (item.id === itemId ? { ...item, status } : item)),
+        };
+      })
+    );
+  };
+
+  const handleAddGanttTask = (task: GanttTask) => {
+    setGanttTasks((prev) => [...prev, task]);
+  };
+
+  const handleUpdateGanttTask = (task: GanttTask) => {
+    setGanttTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+  };
+
+  const handleUpdateOkrKeyResult = (okrId: string, krId: string, currentVal: number) => {
+    setProjectOkrs((prev) =>
+      prev.map((okr) => {
+        if (okr.id !== okrId) return okr;
+        return {
+          ...okr,
+          keyResults: okr.keyResults.map((kr) => (kr.id === krId ? { ...kr, current: currentVal } : kr)),
+        };
+      })
+    );
+  };
+
+  const handleImportData = (
+    data: {
+      processes?: Process[];
+      systems?: SystemItem[];
+      profile?: UserProfile;
+      improvementItems?: ImprovementItem[];
+      notifications?: UserNotification[];
+      adminBroadcastLogs?: NotificationLog[];
+    },
+    mode: 'merge' | 'overwrite'
+  ) => {
+    if (mode === 'overwrite') {
+      if (data.profile) {
+        localStorage.setItem(STORAGE.profile, JSON.stringify(data.profile));
+        setProfile(data.profile);
+        setCurrentPersona(data.profile.role);
+      }
+      if (data.processes) {
+        setProcesses(data.processes);
+      }
+      if (data.systems) {
+        setAvailableSystems(data.systems);
+      }
+      if (data.improvementItems) {
+        setImprovementItems(data.improvementItems);
+      }
+      if (data.notifications) {
+        setNotifications(data.notifications);
+      }
+      if (data.adminBroadcastLogs) {
+        setAdminBroadcastLogs(data.adminBroadcastLogs);
+      }
+    } else {
+      if (data.profile && !profile) {
+        localStorage.setItem(STORAGE.profile, JSON.stringify(data.profile));
+        setProfile(data.profile);
+        setCurrentPersona(data.profile.role);
+      }
+      
+      if (data.processes) {
+        setProcesses((prev) => {
+          const merged = [...prev];
+          data.processes!.forEach((importedProc) => {
+            const index = merged.findIndex((p) => p.id === importedProc.id);
+            if (index > -1) {
+              merged[index] = importedProc;
+            } else {
+              merged.push(importedProc);
+            }
+          });
+          return merged;
+        });
+      }
+
+      if (data.systems) {
+        setAvailableSystems((prev) => {
+          const merged = [...prev];
+          data.systems!.forEach((importedSys) => {
+            const index = merged.findIndex((s) => s.id === importedSys.id || s.name.toLowerCase() === importedSys.name.toLowerCase());
+            if (index > -1) {
+              merged[index] = {
+                ...merged[index],
+                ...importedSys,
+                processCount: Math.max(merged[index].processCount, importedSys.processCount),
+              };
+            } else {
+              merged.push(importedSys);
+            }
+          });
+          return merged;
+        });
+      }
+
+      if (data.improvementItems) {
+        setImprovementItems((prev) => {
+          const merged = [...prev];
+          data.improvementItems!.forEach((importedImp) => {
+            if (!merged.some((item) => item.id === importedImp.id)) {
+              merged.push(importedImp);
+            }
+          });
+          return merged;
+        });
+      }
+
+      if (data.notifications) {
+        setNotifications((prev) => {
+          const merged = [...prev];
+          data.notifications!.forEach((importedNotif) => {
+            if (!merged.some((item) => item.id === importedNotif.id)) {
+              merged.push(importedNotif);
+            }
+          });
+          return merged;
+        });
+      }
+
+      if (data.adminBroadcastLogs) {
+        setAdminBroadcastLogs((prev) => {
+          const merged = [...prev];
+          data.adminBroadcastLogs!.forEach((importedLog) => {
+            if (!merged.some((item) => item.id === importedLog.id)) {
+              merged.push(importedLog);
+            }
+          });
+          return merged;
+        });
+      }
+    }
+  };
+
   // ---------- Render current phase ----------
   if (phase === 'landing') {
-    return (
-      <LandingPage
-        onStart={() => setPhase('onboarding')}
-        registeredProfiles={registeredProfiles}
-        profilesLoading={spreadsheetEnabled && !remoteReady}
-        onLogin={handleExistingLogin}
-        onUpdateProfile={handleUpdateRegisteredProfile}
-      />
-    );
+    return <LandingPage onStart={() => setPhase('onboarding')} />;
   }
 
   if (phase === 'onboarding') {
-    return <Onboarding onComplete={handleOnboardingComplete} onBack={() => setPhase('landing')} registeredProfiles={registeredProfiles} />;
+    return <Onboarding onComplete={handleOnboardingComplete} onBack={() => setPhase('landing')} />;
   }
 
   if (phase === 'locked' && profile) {
@@ -343,7 +516,7 @@ export default function App() {
         clearFocusProcess={() => setFocusProcessId(null)}
         processes={processes}
         availableSystems={availableSystems}
-        registeredProfiles={registeredProfiles}
+        onUpdateSystems={setAvailableSystems}
         notifications={notifications}
         adminBroadcastLogs={adminBroadcastLogs}
         improvementItems={improvementItems}
@@ -356,20 +529,30 @@ export default function App() {
         onTriggerAdminNotification={handleTriggerAdminNotification}
         onAddImprovementItem={handleAddImprovementItem}
         onUpdateImprovementItem={handleUpdateImprovementItem}
+        projectsManaged={managedProjects}
+        teamMembers={teamMembers}
+        transcripts={transcripts}
+        meetingNotes={meetingNotes}
+        ganttTasks={ganttTasks}
+        projectOkrs={projectOkrs}
+        onUpdateProject={handleUpdateProject}
+        onAddProject={handleAddProject}
+        onAddTeamMember={handleAddTeamMember}
+        onRemoveTeamMember={handleRemoveTeamMember}
+        onAddTranscript={handleAddTranscript}
+        onAddMeetingNote={handleAddMeetingNote}
+        onUpdateMeetingNote={handleUpdateMeetingNote}
+        onUpdateActionItemStatus={handleUpdateActionItemStatus}
+        onAddGanttTask={handleAddGanttTask}
+        onUpdateGanttTask={handleUpdateGanttTask}
+        onUpdateOkrKeyResult={handleUpdateOkrKeyResult}
         onCaptureNew={() => setPhase('journey')}
-        onLock={handleStartOver}
+        onLock={handleLock}
+        onImportData={handleImportData}
       />
     );
   }
 
   // Fallback — inconsistent persisted state, restart cleanly.
-  return (
-    <LandingPage
-      onStart={() => setPhase('onboarding')}
-      registeredProfiles={registeredProfiles}
-      profilesLoading={spreadsheetEnabled && !remoteReady}
-      onLogin={handleExistingLogin}
-      onUpdateProfile={handleUpdateRegisteredProfile}
-    />
-  );
+  return <LandingPage onStart={() => setPhase('onboarding')} />;
 }

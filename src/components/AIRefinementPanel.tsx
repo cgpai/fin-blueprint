@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, ScanSearch, Sparkles, TriangleAlert } from 'lucide-react';
-import { AnalysisResult, Process } from '../types';
+import { AnalysisResult, Process, SystemItem } from '../types';
 import { CLASSIFICATION_META } from '../lib/utils';
-import { analyzeProcess } from '../lib/browserAi';
 import { ClassChip, Meter } from './ui';
 
 type Classification = 'agentic-ai' | 'automation' | 'human-in-the-loop';
@@ -18,11 +17,13 @@ const DRIVER_LABELS: Array<{ key: 'volume' | 'repetitiveness' | 'ruleClarity' | 
 /** AI refinement & classification (US-09/10) — explainable, overridable, feeds the hackathon list. */
 export default function AIRefinementPanel({
   processes,
+  availableSystems,
   focusProcessId,
   clearFocusProcess,
   onUpdateProcess,
 }: {
   processes: Process[];
+  availableSystems: SystemItem[];
   focusProcessId: string | null;
   clearFocusProcess: () => void;
   onUpdateProcess: (process: Process) => void;
@@ -44,10 +45,25 @@ export default function AIRefinementPanel({
     setOverrides({});
     setApplied(false);
     try {
-      setResult(await analyzeProcess({ title: proc.title, description: proc.description, steps: proc.steps }));
+      const res = await fetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: proc.title,
+          description: proc.description,
+          steps: proc.steps,
+          availableSystems: availableSystems.map(s => ({
+            name: s.name,
+            category: s.category,
+            description: s.description || ''
+          }))
+        }),
+      });
+      if (!res.ok) throw new Error(`Analysis failed (${res.status})`);
+      setResult((await res.json()) as AnalysisResult);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'The refinement engine could not analyse this process.');
+      setError('The refinement engine could not be reached — check the dev server and try again.');
     } finally {
       setLoading(false);
     }
@@ -81,6 +97,7 @@ export default function AIRefinementPanel({
       else delete userOverrides[step.id];
       return {
         ...step,
+        name: refined.name || step.name,
         description: refined.refinedDescription || step.description,
         inputs: step.inputs.length ? step.inputs : refined.suggestedInputs ?? [],
         outputs: step.outputs.length ? step.outputs : refined.suggestedOutputs ?? [],
@@ -91,6 +108,8 @@ export default function AIRefinementPanel({
 
     onUpdateProcess({
       ...selected,
+      title: result.refinedTitle || selected.title,
+      description: result.refinedDescription || selected.description,
       steps,
       status: 'Refined',
       gaps: result.gaps,
@@ -117,7 +136,7 @@ export default function AIRefinementPanel({
 
       {/* Picker */}
       <div className="card p-5 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-0 w-full sm:min-w-56">
+        <div className="flex-1 min-w-56">
           <label className="label" htmlFor="ref-proc">Process to analyse</label>
           <select
             id="ref-proc"

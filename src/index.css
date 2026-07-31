@@ -35,7 +35,6 @@
 
 html, body, #root {
   height: 100%;
-  overflow-x: hidden;
 }
 
 body {
@@ -238,27 +237,101 @@ body {
   animation: pulseRing 1.6s ease-out infinite;
 }
 
-/* Print styles for the process output view (US-08) */
+/* Print styles for the process output view (US-08) and general app layout */
 @media print {
-  body {
-    background: #fff !important;
+  /* Reset layout constraints for printing */
+  html,
+  body,
+  #root,
+  div[class*="h-screen"],
+  div[class*="w-screen"],
+  .h-screen,
+  .w-screen {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    position: relative !important;
+    display: block !important;
   }
-  aside, nav, header.app-header, button, select, input, textarea {
+
+  /* Make sure background is white and text is readable */
+  body {
+    background: #ffffff !important;
+    color: #16233a !important;
+  }
+
+  /* Hide navigation, sidebars, headers, and interactive controls */
+  aside,
+  nav,
+  header.app-header,
+  button,
+  select,
+  input,
+  textarea,
+  .print\:hidden {
     display: none !important;
   }
-  main {
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
-  }
-  .card {
-    box-shadow: none !important;
-    border-color: #d4d4dc !important;
-    break-inside: avoid;
-  }
-  #process-detail-view {
+
+  /* Reset main content containers to occupy full width and height naturally */
+  main,
+  div[class*="flex-1"],
+  .flex-1 {
     display: block !important;
     width: 100% !important;
-    padding: 16px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Maximize print area */
+  .max-w-6xl,
+  .max-w-7xl,
+  .mx-auto {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Card and section printing hygiene */
+  .card {
+    box-shadow: none !important;
+    border-color: #d2daf0 !important;
+    background-color: #ffffff !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 1.5rem !important;
+  }
+
+  /* Ensure detail view is block and takes full screen */
+  #process-detail-view,
+  #prd-hub-view {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* Avoid breaking inside important structural components */
+  .print\:break-inside-avoid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Show full text and links inside code/mono */
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
   }
 }

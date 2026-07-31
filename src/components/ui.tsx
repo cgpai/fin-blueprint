@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, TextareaHTMLAttributes } from 'react';
 import { CLASSIFICATION_META, initials } from '../lib/utils';
 
 export function SectionLabel({ children }: { children: ReactNode }) {
@@ -137,3 +137,29 @@ export function TagList({ items, onRemove }: { items: string[]; onRemove?: (item
     </div>
   );
 }
+
+export function AutoTextarea({
+  value,
+  ...props
+}: { value: string } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      el.style.height = 'auto';
+      // Use scrollHeight or default minimum height
+      const offsetHeight = el.scrollHeight;
+      el.style.height = `${offsetHeight}px`;
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      {...props}
+    />
+  );
+}
+

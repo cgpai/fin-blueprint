@@ -5,8 +5,10 @@ import UploadOutputs from './UploadOutputs';
 import DescribeProcess from './DescribeProcess';
 import ReviewSteps from './ReviewSteps';
 import Recap, { RecapChoice } from './Recap';
+import PRDInterviewChatbot from './PRDInterviewChatbot';
 import {
   DraftProcess,
+  MiningResult,
   Process,
   ProcessStep,
   SubFunction,
@@ -15,15 +17,15 @@ import {
   WorkingOutput,
 } from '../../types';
 import { computeCompleteness, stepGaps, uid } from '../../lib/utils';
-import { mineProcesses } from '../../lib/browserAi';
 import { SUBFUNCTIONS_LIST } from '../../data/mockData';
 
-type Stage = 'upload' | 'describe' | 'mining' | 'review' | 'recap';
+type Stage = 'upload' | 'describe' | 'interview' | 'mining' | 'review' | 'recap';
 
 const STAGE_RAIL: Array<{ id: Stage; label: string; icon: typeof UploadCloud }> = [
   { id: 'upload', label: 'Outputs', icon: UploadCloud },
   { id: 'describe', label: 'Describe', icon: AudioLines },
-  { id: 'mining', label: 'Mine', icon: BrainCircuit },
+  { id: 'interview', label: 'Interview', icon: BrainCircuit },
+  { id: 'mining', label: 'Mine', icon: Sparkles },
   { id: 'review', label: 'Review', icon: ListChecks },
   { id: 'recap', label: 'Confirm', icon: Check },
 ];
@@ -102,16 +104,27 @@ export default function CaptureJourney({
     return () => clearInterval(interval);
   }, [stage]);
 
-  const runMining = async () => {
+  const runMining = async (prdNarrative?: string) => {
     setStage('mining');
     setMiningError(null);
     const startedAt = Date.now();
     try {
-      const result = await mineProcesses({
-        title: title || undefined,
-        description: narrative,
-        sourceTexts: outputs.map((o) => `--- ${o.name} ---\n${o.text}`),
+      const res = await fetch('/api/ai/mine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || undefined,
+          description: prdNarrative ? `${narrative}\n\n${prdNarrative}` : narrative,
+          sourceTexts: outputs.map((o) => `--- ${o.name} ---\n${o.text}`),
+          availableSystems: availableSystems.map(s => ({
+            name: s.name,
+            category: s.category,
+            description: s.description || ''
+          })),
+        }),
       });
+      if (!res.ok) throw new Error(`Mining failed (${res.status})`);
+      const result = (await res.json()) as MiningResult;
 
       const mined: DraftProcess[] = (result.processes || []).map((proc) => {
         const steps: ProcessStep[] = (proc.steps || []).map((s, i) => ({
@@ -166,7 +179,7 @@ export default function CaptureJourney({
       setTimeout(() => setStage('review'), Math.max(0, minimumWait));
     } catch (err: any) {
       console.error(err);
-      setMiningError(err.message || 'The understanding agent could not read that process. Add more detail, then try again.');
+      setMiningError('The understanding agent could not reach the server. Check that the dev server is running, then try again.');
     }
   };
 
@@ -191,6 +204,7 @@ export default function CaptureJourney({
         gaps: dp.steps.flatMap((s) => stepGaps(s).map((g) => `Step ${s.order} "${s.name}" is missing ${g}.`)),
         isShared: dp.isShared,
         taggedUsers: dp.taggedUsers,
+        manualRoleOverride: dp.manualRoleOverride,
       };
     });
   };
@@ -221,11 +235,11 @@ export default function CaptureJourney({
     <div className="min-h-full canvas-wash overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
         {/* Progress rail */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-          <div className="glass rounded-full px-3 sm:px-4 py-2 flex items-center gap-0.5 sm:gap-2 overflow-x-auto max-w-full">
+        <div className="flex items-center justify-between mb-8">
+          <div className="glass rounded-full px-4 py-2 flex items-center gap-1 sm:gap-2">
             {STAGE_RAIL.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-0.5 sm:gap-2 shrink-0">
-                {i > 0 && <span className={`w-3 sm:w-6 h-px ${i <= currentIndex ? 'bg-ink' : 'bg-line'}`} />}
+              <div key={s.id} className="flex items-center gap-1 sm:gap-2">
+                {i > 0 && <span className={`w-4 sm:w-6 h-px ${i <= currentIndex ? 'bg-ink' : 'bg-line'}`} />}
                 <span
                   className={`flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2 py-1 transition-colors ${
                     i === currentIndex ? 'bg-ink text-white' : i < currentIndex ? 'text-citron-deep' : 'text-faint'
@@ -237,7 +251,7 @@ export default function CaptureJourney({
               </div>
             ))}
           </div>
-          <button onClick={onSkipToWorkspace} className="text-xs font-medium text-mute hover:text-ink transition-colors cursor-pointer whitespace-nowrap">
+          <button onClick={onSkipToWorkspace} className="text-xs font-medium text-mute hover:text-ink transition-colors cursor-pointer whitespace-nowrap ml-3">
             Skip for now →
           </button>
         </div>
@@ -261,7 +275,17 @@ export default function CaptureJourney({
             setNarrative={setNarrative}
             hasOutputs={outputs.length > 0}
             onBack={() => setStage('upload')}
-            onMine={runMining}
+            onMine={() => setStage('interview')}
+          />
+        )}
+
+        {stage === 'interview' && (
+          <PRDInterviewChatbot
+            processTitle={title || 'Untitled Process'}
+            onConfirmPRD={(prdText) => {
+              runMining(prdText);
+            }}
+            onBack={() => setStage('describe')}
           />
         )}
 
@@ -300,7 +324,7 @@ export default function CaptureJourney({
                 <p className="text-sm text-mute mt-2 max-w-sm">{miningError}</p>
                 <div className="flex gap-2 mt-6">
                   <button className="btn-ghost !py-2 !px-4 text-xs" onClick={() => setStage('describe')}>Back</button>
-                  <button className="btn-dark !py-2 !px-4 text-xs" onClick={runMining}>Try again</button>
+                  <button className="btn-dark !py-2 !px-4 text-xs" onClick={() => runMining()}>Try again</button>
                 </div>
               </>
             )}
