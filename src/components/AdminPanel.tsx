@@ -9,9 +9,11 @@ import {
 } from 'recharts';
 import { Database, Download, Megaphone, Rocket, Send, Trophy, Plus, Edit2, Trash2, Settings2, Search, X, Check, HelpCircle } from 'lucide-react';
 import { ImprovementItem, Process, SubFunction, SystemItem } from '../types';
-import { MOCK_USERS, SUBFUNCTIONS_LIST } from '../data/mockData';
+import { SUBFUNCTIONS_LIST } from '../data/mockData';
+import { isRemoteEnabled } from '../lib/blueprintApi';
 import { CHART_COLORS, classificationCounts } from '../lib/utils';
 import { Meter, Stat, AutoTextarea } from './ui';
+import RemoteUserAdmin from './RemoteUserAdmin';
 
 const TOOLTIP_STYLE = {
   borderRadius: 14,
@@ -261,6 +263,8 @@ export default function AdminPanel({
           <Download size={15} /> Export dataset
         </button>
       </div>
+
+      {isRemoteEnabled() && <RemoteUserAdmin />}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Processes captured" value={processes.length} hint={`${classifiedSteps} classified steps`} accent="citron" />
@@ -698,7 +702,9 @@ export default function AdminPanel({
               <>
                 <input id="adm-target" className="field" list="adm-emails" placeholder="person@company.com" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
                 <datalist id="adm-emails">
-                  {MOCK_USERS.map((u) => <option key={u.id} value={u.email} />)}
+                  {[...new Set(processes.map((p) => p.ownerEmail).filter(Boolean))].map((email) => (
+                    <option key={email} value={email} />
+                  ))}
                 </datalist>
               </>
             ) : (

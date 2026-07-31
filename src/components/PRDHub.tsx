@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, FileText, Table, Users, Landmark, Layers, ArrowRight, Download, CheckCircle, Receipt, HardDrive, RefreshCw } from 'lucide-react';
+import { Sparkles, FileText, Table, Users, Landmark, Layers, ArrowRight, Download, CheckCircle, Receipt, HardDrive, RefreshCw, X } from 'lucide-react';
 import { Process } from '../types';
 
 // Convert USD to IDR at 1 USD = Rp 16.000
@@ -134,14 +134,16 @@ const BASE_ENGINES = [
 
 interface PRDHubProps {
   processes: Process[];
+  isAdmin?: boolean;
 }
 
-export default function PRDHub({ processes }: PRDHubProps) {
+export default function PRDHub({ processes, isAdmin }: PRDHubProps) {
   const [engines, setEngines] = useState(BASE_ENGINES);
   const [activeEngine, setActiveEngine] = useState<string>('engine-claims');
   const [activeSubTab, setActiveSubTab] = useState<'prd' | 'pricing'>('prd');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [deletingEngine, setDeletingEngine] = useState<(typeof BASE_ENGINES)[0] | null>(null);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -357,12 +359,23 @@ Make.com Scheduler: Rp 144.000 / month
                 <h3 className="font-display text-xl font-bold text-ink">{currentEngine.title}</h3>
                 <p className="text-xs text-mute">{currentEngine.description}</p>
               </div>
-              <button
-                onClick={() => handleExportPRD(currentEngine.id)}
-                className="btn-dark flex items-center gap-1.5 !text-xs !py-2 !px-4 shrink-0 cursor-pointer print:hidden"
-              >
-                <Download size={13} /> Export PRD File
-              </button>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => setDeletingEngine(currentEngine)}
+                    className="btn-outline flex items-center gap-1.5 !text-xs !py-2 !px-4 shrink-0 cursor-pointer print:hidden text-rose-500 border-rose-200 hover:bg-rose-50 hover:border-rose-300"
+                    title="Erase Architecture"
+                  >
+                    <X size={13} /> Erase
+                  </button>
+                )}
+                <button
+                  onClick={() => handleExportPRD(currentEngine.id)}
+                  className="btn-dark flex items-center gap-1.5 !text-xs !py-2 !px-4 shrink-0 cursor-pointer print:hidden"
+                >
+                  <Download size={13} /> Export PRD File
+                </button>
+              </div>
             </div>
 
             {/* Core Section: Target Audience */}
@@ -498,6 +511,39 @@ Make.com Scheduler: Rp 144.000 / month
             <p className="text-teal-900 leading-relaxed">
               Kami memisahkan beban Capex (satu kali pengerjaan pengembangan sistem / set up integration) dengan beban Opex (biaya berjalan bulanan). OPEX kami murni berbasis konsumsi (consumption-based) menggunakan API Key Server-Side. Untuk orkestrasi, Make.com bertindak sebagai integrator visual yang menghubungkan service account Anda.
             </p>
+          </div>
+        </div>
+      )}
+
+      {deletingEngine && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 grid place-items-center mx-auto mb-2">
+              <X size={24} />
+            </div>
+            <h3 className="font-display font-semibold text-lg text-ink">Erase Architecture?</h3>
+            <p className="text-sm text-mute">
+              Are you sure you want to completely delete the architecture <span className="font-semibold text-ink">&quot;{deletingEngine.title}&quot;</span>? This action cannot be undone.
+            </p>
+            <div className="flex justify-center gap-2 pt-4">
+              <button
+                onClick={() => setDeletingEngine(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer w-full"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const newEngines = engines.filter((e) => e.id !== deletingEngine.id);
+                  setEngines(newEngines);
+                  if (newEngines.length > 0) setActiveEngine(newEngines[0].id);
+                  setDeletingEngine(null);
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer w-full"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

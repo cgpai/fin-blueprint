@@ -14,7 +14,7 @@ import {
 import { DraftProcess, ProcessStep, SubFunction, SystemItem } from '../../types';
 import { computeCompleteness, stepGaps, uid } from '../../lib/utils';
 import { ClassChip, Meter, TagList, AutoTextarea } from '../ui';
-import { MOCK_USERS, SUBFUNCTIONS_LIST } from '../../data/mockData';
+import { SUBFUNCTIONS_LIST } from '../../data/mockData';
 
 function AttributeEditor({
   label,
@@ -302,7 +302,7 @@ function ProcessEditor({
               label="Tag collaborators (they'll be linked & notified)"
               values={process.taggedUsers}
               placeholder="colleague@company.com"
-              suggestions={MOCK_USERS.map((u) => u.email)}
+              suggestions={[]}
               onChange={(v) => onChange({ ...process, taggedUsers: v })}
             />
           </div>

@@ -48,15 +48,11 @@ export default function Onboarding({
     setSaving(true);
     const passwordHash = await hashPassword(password);
     setStep(3);
-    const lowerName = name.toLowerCase();
-    const lowerEmail = (email || '').toLowerCase();
-    const isNicole = lowerName.includes('nicole') || lowerEmail.includes('nicole');
-    const finalRole = isNicole ? 'Admin' : role;
     setTimeout(() => {
       onComplete({
         name: name.trim(),
         email: email.trim() || undefined,
-        role: finalRole,
+        role,
         passwordHash,
         createdAt: new Date().toISOString(),
         manualRoleOverride: manualRoleOverride.trim() || undefined,

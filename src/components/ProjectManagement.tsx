@@ -57,6 +57,7 @@ export default function ProjectManagement({
   profileEmail,
   onUpdateProject,
   onAddProject,
+  onDeleteProject,
   onAddTeamMember,
   onRemoveTeamMember,
   onAddTranscript,
@@ -83,6 +84,7 @@ export default function ProjectManagement({
   profileEmail: string;
   onUpdateProject: (proj: ManagedProject) => void;
   onAddProject: (proj: ManagedProject) => void;
+  onDeleteProject: (projectId: string) => void;
   onAddTeamMember: (member: TeamMember) => void;
   onRemoveTeamMember: (memberId: string) => void;
   onAddTranscript: (transcript: MeetingTranscript) => void;
@@ -151,6 +153,12 @@ export default function ProjectManagement({
   const [newProjTargetDate, setNewProjTargetDate] = useState('2026-12-31');
   const [selectedCatalogueProcessId, setSelectedCatalogueProcessId] = useState<string>('none');
   const [catalogueFilter, setCatalogueFilter] = useState<'automation_ai' | 'all'>('automation_ai');
+
+  const [showEditOwnerModal, setShowEditOwnerModal] = useState(false);
+  const [editingOwnerName, setEditingOwnerName] = useState('');
+  const [editingOwnerEmail, setEditingOwnerEmail] = useState('');
+
+  const [deletingProject, setDeletingProject] = useState<ManagedProject | null>(null);
 
   // Cleanup mic timer on unmount
   useEffect(() => {
@@ -472,23 +480,37 @@ export default function ProjectManagement({
         {projects.map((proj) => {
           const isActive = proj.id === currentProject.id;
           return (
-            <button
-              key={proj.id}
-              onClick={() => setActiveProjectId(proj.id)}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all whitespace-nowrap cursor-pointer shrink-0 ${
-                isActive
-                  ? 'bg-ink text-white shadow-lift'
-                  : 'bg-white hover:bg-veil/60 text-ink border border-line'
-              }`}
-            >
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold max-w-[200px] truncate">{proj.title}</span>
-                <span className={`text-[10px] ${isActive ? 'text-citron font-medium' : 'text-mute'}`}>
-                  {proj.stage.split(':')[0]}: {proj.stage.split(':')[1]?.trim()} · {proj.progressPercent}%
-                </span>
-              </div>
-              <ChevronRight size={14} className={isActive ? 'text-citron' : 'text-mute'} />
-            </button>
+            <div key={proj.id} className="relative group shrink-0">
+              <button
+                onClick={() => setActiveProjectId(proj.id)}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'bg-ink text-white shadow-lift'
+                    : 'bg-white hover:bg-veil/60 text-ink border border-line'
+                }`}
+              >
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold max-w-[200px] truncate">{proj.title}</span>
+                  <span className={`text-[10px] ${isActive ? 'text-citron font-medium' : 'text-mute'}`}>
+                    {proj.stage.split(':')[0]}: {proj.stage.split(':')[1]?.trim()} · {proj.progressPercent}%
+                  </span>
+                </div>
+                <ChevronRight size={14} className={isActive ? 'text-citron' : 'text-mute'} />
+              </button>
+
+              {(isL2orL3 || currentPersona === 'Admin') && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingProject(proj);
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-line text-rose-500 items-center justify-center hidden group-hover:flex hover:bg-rose-50 transition-all cursor-pointer shadow-sm z-10"
+                  title="Erase Project"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -521,7 +543,20 @@ export default function ProjectManagement({
             </div>
 
             {/* Stage Selector & Owner Details */}
-            <div className="flex flex-col items-start md:items-end gap-3 shrink-0 bg-canvas p-4 rounded-2xl border border-line">
+            <div className="flex flex-col items-start md:items-end gap-3 shrink-0 bg-canvas p-4 rounded-2xl border border-line relative group">
+              {(isL2orL3 || currentPersona === 'Admin') && (
+                <button
+                  onClick={() => {
+                    setEditingOwnerName(currentProject.ownerName);
+                    setEditingOwnerEmail(currentProject.ownerEmail);
+                    setShowEditOwnerModal(true);
+                  }}
+                  className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white border border-line text-mute flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-ink hover:border-ink transition-all cursor-pointer shadow-sm"
+                  title="Assign New Project Owner"
+                >
+                  <Edit2 size={12} />
+                </button>
+              )}
               <div className="text-right">
                 <span className="text-[11px] font-semibold text-mute block">PROJECT OWNER</span>
                 <span className="text-xs font-bold text-ink">{currentProject.ownerName}</span>
@@ -1090,7 +1125,7 @@ export default function ProjectManagement({
                 <input
                   type="email"
                   required
-                  placeholder="e.g. hendra.w@siloamhospitals.com"
+                  placeholder="e.g. name@example.com"
                   className="field text-xs"
                   value={newPersonEmail}
                   onChange={(e) => setNewPersonEmail(e.target.value)}
@@ -1840,6 +1875,106 @@ export default function ProjectManagement({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Owner Modal */}
+      {showEditOwnerModal && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <h3 className="font-display font-semibold text-base text-ink">Edit Project Owner</h3>
+              <button onClick={() => setShowEditOwnerModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-mute block mb-1">Owner Name</label>
+                <input
+                  type="text"
+                  value={editingOwnerName}
+                  onChange={(e) => setEditingOwnerName(e.target.value)}
+                  className="field w-full text-xs"
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-mute block mb-1">Owner Email</label>
+                <input
+                  type="email"
+                  value={editingOwnerEmail}
+                  onChange={(e) => setEditingOwnerEmail(e.target.value)}
+                  className="field w-full text-xs"
+                  placeholder="e.g. name@example.com"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowEditOwnerModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (editingOwnerName && editingOwnerEmail) {
+                    onUpdateProject({
+                      ...currentProject,
+                      ownerName: editingOwnerName,
+                      ownerEmail: editingOwnerEmail,
+                    });
+                    setShowEditOwnerModal(false);
+                  }
+                }}
+                className="btn-dark"
+                disabled={!editingOwnerName || !editingOwnerEmail}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Confirm Modal */}
+      {deletingProject && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 grid place-items-center mx-auto mb-2">
+              <X size={24} />
+            </div>
+            <h3 className="font-display font-semibold text-lg text-ink">Delete Project?</h3>
+            <p className="text-sm text-mute">
+              Are you sure you want to completely delete the project <span className="font-semibold text-ink">&quot;{deletingProject.title}&quot;</span>? This action cannot be undone.
+            </p>
+
+            <div className="flex justify-center gap-2 pt-4">
+              <button
+                onClick={() => setDeletingProject(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer w-full"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const isActive = deletingProject.id === currentProject.id;
+                  onDeleteProject(deletingProject.id);
+                  if (isActive && projects.length > 1) {
+                    const otherProj = projects.find((p) => p.id !== deletingProject.id);
+                    if (otherProj) setActiveProjectId(otherProj.id);
+                  }
+                  setDeletingProject(null);
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer w-full"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

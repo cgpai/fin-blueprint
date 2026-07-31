@@ -21,11 +21,11 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['L1', 'L2', 'L3'] },
   { id: 'catalogue', label: 'Catalogue', icon: BookOpen, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
-  { id: 'prd_hub', label: 'Consolidated PRD Hub', icon: FileText, roles: ['L1', 'L2', 'Admin'] },
+  { id: 'prd_hub', label: 'Consolidated PRD Hub', icon: FileText, roles: ['L2', 'Admin'] },
   { id: 'capture', label: 'Capture a process', icon: PlusCircle, roles: ['L1', 'L2', 'L3', 'L4'] },
   { id: 'refinement', label: 'AI Refinement', icon: Sparkles, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
-  { id: 'notifications', label: 'Project Management', icon: FolderKanban, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
-  { id: 'admin', label: 'Programme admin', icon: ShieldCheck, roles: ['L1', 'Admin'] },
+  { id: 'notifications', label: 'Project Management', icon: FolderKanban, roles: ['L2', 'L3', 'L4', 'Admin'] },
+  { id: 'admin', label: 'Programme admin', icon: ShieldCheck, roles: ['Admin'] },
 ];
 
 const PERSONA_LABELS: Record<Persona, string> = {

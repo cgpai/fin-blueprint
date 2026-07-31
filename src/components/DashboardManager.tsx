@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { BellRing, CircleCheck, Flame, Lightbulb, Plus } from 'lucide-react';
 import { ImprovementItem, Process } from '../types';
-import { MOCK_USERS } from '../data/mockData';
 import { CLASSIFICATION_META, uid } from '../lib/utils';
 import { Avatar, Meter, Stat } from './ui';
 
@@ -23,11 +22,19 @@ export default function DashboardManager({
 }) {
   const [remindedEmails, setRemindedEmails] = useState<string[]>([]);
 
-  const roster = MOCK_USERS.filter((u) => u.level === 'L4').map((user) => {
-    const owned = processes.filter((p) => p.ownerEmail === user.email || p.ownerName === user.name);
+  // Roster from real process owners — no hardcoded user list.
+  const rosterMap = new Map<string, { name: string; email: string; owned: Process[] }>();
+  for (const p of processes) {
+    const key = (p.ownerEmail || p.ownerName || '').toLowerCase();
+    if (!key) continue;
+    const row = rosterMap.get(key) || { name: p.ownerName, email: p.ownerEmail || '', owned: [] };
+    row.owned.push(p);
+    rosterMap.set(key, row);
+  }
+  const roster = [...rosterMap.values()].map((user) => {
     const status: 'Complete' | 'In progress' | 'Not started' =
-      owned.length === 0 ? 'Not started' : owned.every((p) => p.completenessScore >= 85) ? 'Complete' : 'In progress';
-    return { user, owned, status };
+      user.owned.length === 0 ? 'Not started' : user.owned.every((p) => p.completenessScore >= 85) ? 'Complete' : 'In progress';
+    return { user, owned: user.owned, status };
   });
 
   const completionPct = roster.length
@@ -73,12 +80,15 @@ export default function DashboardManager({
             <CircleCheck size={15} className="text-citron-deep" /> Personnel documentation tracker
           </h3>
           <ul className="mt-4 space-y-3.5">
+            {roster.length === 0 && (
+              <li className="text-xs text-mute">No process owners yet — roster fills as staff capture processes.</li>
+            )}
             {roster.map(({ user, owned, status }) => (
-              <li key={user.id} className="flex items-center gap-3">
+              <li key={user.email || user.name} className="flex items-center gap-3">
                 <Avatar name={user.name} size={32} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{user.name}</div>
-                  <div className="text-[11px] text-faint truncate">{user.subFunction} · {owned.length} process{owned.length === 1 ? '' : 'es'}</div>
+                  <div className="text-[11px] text-faint truncate">{user.email || 'No email'} · {owned.length} process{owned.length === 1 ? '' : 'es'}</div>
                 </div>
                 <span
                   className={`chip border-transparent ${
@@ -87,7 +97,7 @@ export default function DashboardManager({
                 >
                   {status}
                 </span>
-                {status !== 'Complete' && (
+                {status !== 'Complete' && user.email && (
                   <button
                     className="btn-ghost !p-2 shrink-0 disabled:opacity-40 print:hidden"
                     title={remindedEmails.includes(user.email) ? 'Reminder sent' : 'Send a reminder'}

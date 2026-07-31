@@ -59,6 +59,7 @@ export default function Workspace({
   onUpdateImprovementItem,
   onUpdateProject,
   onAddProject,
+  onDeleteProject,
   onAddTeamMember,
   onRemoveTeamMember,
   onAddTranscript,
@@ -101,6 +102,7 @@ export default function Workspace({
   onUpdateImprovementItem: (item: ImprovementItem) => void;
   onUpdateProject?: (proj: ManagedProject) => void;
   onAddProject?: (proj: ManagedProject) => void;
+  onDeleteProject?: (projectId: string) => void;
   onAddTeamMember?: (member: TeamMember) => void;
   onRemoveTeamMember?: (memberId: string) => void;
   onAddTranscript?: (tr: MeetingTranscript) => void;
@@ -287,7 +289,7 @@ export default function Workspace({
             )}
 
             {currentTab === 'prd_hub' && (
-              <PRDHub processes={processes} />
+              <PRDHub processes={processes} isAdmin={currentPersona === 'Admin'} />
             )}
 
             {currentTab === 'refinement' && (
@@ -318,6 +320,7 @@ export default function Workspace({
                 profileEmail={profile.email}
                 onUpdateProject={onUpdateProject || (() => {})}
                 onAddProject={onAddProject || (() => {})}
+                onDeleteProject={onDeleteProject || (() => {})}
                 onAddTeamMember={onAddTeamMember || (() => {})}
                 onRemoveTeamMember={onRemoveTeamMember || (() => {})}
                 onAddTranscript={onAddTranscript || (() => {})}

@@ -18,6 +18,9 @@ const GEMINI_MODEL_FAST = process.env.GEMINI_MODEL_FAST || 'gemini-3.6-flash';
 // just spends more on "thinking" tokens where accuracy matters more than speed.
 const GEMINI_MODEL_REASONING = process.env.GEMINI_MODEL_REASONING || 'gemini-3.6-flash';
 
+// Org label for AI prompts (override via ORG_NAME on Vercel / .env.local).
+const ORG_NAME = process.env.ORG_NAME || 'Finance Directorate';
+
 // The fixed lines-of-work taxonomy. The AI must map each process to exactly one.
 const LINES_OF_WORK = [
   'Procurement',
@@ -450,7 +453,7 @@ app.post('/api/ai/analyze', async (req, res) => {
 
       const prompt = `
         You are an expert AI systems architect and process automation consultant specializing in healthcare finance workflows.
-        Analyze the following process from Siloam Hospitals Group - Finance Directorate and refine it for native-AI transformation.
+        Analyze the following process from ${ORG_NAME} and refine it for native-AI transformation.
 
         Process Title: ${title}
         Process Description: ${description || 'No description provided'}
@@ -905,7 +908,7 @@ app.post('/api/ai/propose-deployment', async (req, res) => {
         actionItems: [
           "Link the operational output metrics directly to the Directorate CFO performance view.",
           "Perform weekly prompt-tuning (for LLMs) or system selector adjustments (for RPA).",
-          "Promote this project in the upcoming Siloam Finance Directorate Vanguard Hackathon."
+          `Promote this project in the upcoming ${ORG_NAME} Vanguard Hackathon.`
         ]
       }
     ],
@@ -929,7 +932,7 @@ app.post('/api/ai/propose-deployment', async (req, res) => {
     ],
     strategicPartnerships: [
       {
-        partnerName: "Siloam IT Security & Infrastructure Directorate",
+        partnerName: `${ORG_NAME} IT Security & Infrastructure`,
         roleDescription: "Reviews API access tokens, configures firewall whitelisting, and oversees secure credentials storage.",
         benefitsCaptured: "Guarantees enterprise-grade compliance, HIPAA-compliant patient record access, and continuous service uptime."
       },
@@ -964,7 +967,7 @@ app.post('/api/ai/meeting-summary', async (req, res) => {
 
   const membersList = (teamMembers && teamMembers.length > 0)
     ? teamMembers.map(m => `${m.name} (${m.email})`).join(', ')
-    : 'Nicole Celia (nicolecelia.work@gmail.com), Hendra Wijaya (hendra.w@siloamhospitals.com)';
+    : 'Project team members (none listed)';
 
   const ai = getGeminiClient();
 
@@ -973,7 +976,7 @@ app.post('/api/ai/meeting-summary', async (req, res) => {
       console.log(`Generating meeting summary for "${title || 'Meeting'}" with Gemini...`);
 
       const prompt = `
-        You are the AI Project Assistant for Siloam Hospitals Finance Directorate.
+        You are the AI Project Assistant for ${ORG_NAME}.
         Analyze the following meeting transcript / raw notes and extract structured meeting outputs.
 
         Meeting Title: ${title || 'Project Meeting'}
@@ -1042,7 +1045,7 @@ app.post('/api/ai/meeting-summary', async (req, res) => {
 
   // Fallback rule-based extraction
   console.log('Using rule-based meeting assistant fallback...');
-  const defaultMember = (teamMembers && teamMembers[0]) || { name: 'Nicole Celia', email: 'nicolecelia.work@gmail.com' };
+  const defaultMember = (teamMembers && teamMembers[0]) || { name: 'Unassigned', email: 'unassigned@example.com' };
   const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   const decisions: string[] = [];
@@ -1086,6 +1089,18 @@ app.post('/api/ai/meeting-summary', async (req, res) => {
     openQuestions: openQuestions.length > 0 ? openQuestions : ['Confirm API rate limits with IT Infrastructure for batch operations.'],
     actionItems
   });
+});
+
+// Postgres-backed auth/process API — shares api/_lib/actions.ts with the Vercel
+// serverless entry (api/blueprint.ts) so local dev and production run identical logic.
+app.post('/api/blueprint', async (req, res) => {
+  try {
+    const { routeAction } = await import('./api/_lib/actions');
+    const data = await routeAction(req.body?.action, req.body?.token, req.body?.payload);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.json({ ok: false, error: err instanceof Error ? err.message : 'Request failed.' });
+  }
 });
 
 // Configure Vite or Static Asset Serving (local / Node host only — not Vercel serverless)

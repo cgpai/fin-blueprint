@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import LandingPage from './components/LandingPage';
 import Onboarding from './components/Onboarding';
 import LockScreen from './components/LockScreen';
+import RemoteLogin from './components/RemoteLogin';
 import CaptureJourney from './components/journey/CaptureJourney';
 import Workspace from './components/Workspace';
+import { isRemoteEnabled, mapProcessToRemoteInput, submitRemoteProcess, RemoteUser } from './lib/blueprintApi';
 
 import {
   AppPhase,
@@ -21,21 +23,7 @@ import {
   UserNotification,
   UserProfile,
 } from './types';
-import {
-  MOCK_PROCESSES,
-  MOCK_SYSTEMS,
-  MOCK_NOTIFICATIONS,
-  MOCK_NOTIFICATION_LOGS,
-  MOCK_IMPROVEMENT_ITEMS,
-} from './data/mockData';
-import {
-  INITIAL_MANAGED_PROJECTS,
-  INITIAL_TEAM_MEMBERS,
-  INITIAL_TRANSCRIPTS,
-  INITIAL_MEETING_NOTES,
-  INITIAL_GANTT_TASKS,
-  INITIAL_PROJECT_OKRS,
-} from './data/projectData';
+import { MOCK_SYSTEMS } from './data/mockData';
 import { uid } from './lib/utils';
 
 const STORAGE = {
@@ -44,6 +32,7 @@ const STORAGE = {
   processes: 'bp_processes',
   systems: 'bp_systems',
   unlocked: 'bp_unlocked', // sessionStorage — cleared when the browser tab closes
+  remoteToken: 'bp_remote_token', // sessionStorage — Postgres API session when VITE_ENABLE_REMOTE_AUTH=true
   projects: 'bp_projects',
   teamMembers: 'bp_team_members',
   transcripts: 'bp_transcripts',
@@ -62,19 +51,16 @@ function loadJSON<T>(key: string, fallback: T): T {
 }
 
 export default function App() {
-  const [profile, setProfile] = useState<UserProfile | null>(() => {
-    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
-    if (loaded) {
-      const isNicole = loaded.name.toLowerCase().includes('nicole') || (loaded.email || '').toLowerCase().includes('nicole');
-      if (isNicole && loaded.role !== 'Admin') {
-        loaded.role = 'Admin';
-        localStorage.setItem(STORAGE.profile, JSON.stringify(loaded));
-      }
-    }
-    return loaded;
-  });
+  const [profile, setProfile] = useState<UserProfile | null>(() => loadJSON<UserProfile | null>(STORAGE.profile, null));
 
   const [phase, setPhase] = useState<AppPhase>(() => {
+    if (isRemoteEnabled()) {
+      if (!sessionStorage.getItem(STORAGE.remoteToken)) return 'remoteLogin';
+      const saved = loadJSON<UserProfile | null>(STORAGE.profile, null);
+      if (saved?.role === 'Admin') return 'workspace';
+      const savedPhase = localStorage.getItem(STORAGE.phase);
+      return savedPhase === 'journey' || savedPhase === 'workspace' ? savedPhase : 'journey';
+    }
     const saved = loadJSON<UserProfile | null>(STORAGE.profile, null);
     if (!saved) return 'landing';
     if (sessionStorage.getItem(STORAGE.unlocked) !== 'true') return 'locked';
@@ -90,39 +76,24 @@ export default function App() {
   });
   const [focusProcessId, setFocusProcessId] = useState<string | null>(null);
 
-  const [currentPersona, setCurrentPersona] = useState<Persona>(() => {
-    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
-    if (loaded) {
-      const isNicole = loaded.name.toLowerCase().includes('nicole') || (loaded.email || '').toLowerCase().includes('nicole');
-      if (isNicole) return 'Admin';
-      return loaded.role;
-    }
-    return 'L4';
-  });
+  const [currentPersona, setCurrentPersona] = useState<Persona>(
+    () => loadJSON<UserProfile | null>(STORAGE.profile, null)?.role ?? 'L4',
+  );
 
-  // ---------- Data layer (local-first, mock-seeded) ----------
-  const [processes, setProcesses] = useState<Process[]>(() => {
-    const loaded = loadJSON<Process[]>(STORAGE.processes, MOCK_PROCESSES);
-    if (!loaded.some(p => p.id === 'proc-ai-reconciliation')) {
-      const target = MOCK_PROCESSES.find(p => p.id === 'proc-ai-reconciliation');
-      if (target) {
-        return [target, ...loaded];
-      }
-    }
-    return loaded;
-  });
+  // ---------- Data layer (local-first; empty seeds — no hardcoded people) ----------
+  const [processes, setProcesses] = useState<Process[]>(() => loadJSON(STORAGE.processes, [] as Process[]));
   const [availableSystems, setAvailableSystems] = useState<SystemItem[]>(() => loadJSON(STORAGE.systems, MOCK_SYSTEMS));
-  const [notifications, setNotifications] = useState<UserNotification[]>(MOCK_NOTIFICATIONS);
-  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(MOCK_NOTIFICATION_LOGS);
-  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(MOCK_IMPROVEMENT_ITEMS);
+  const [notifications, setNotifications] = useState<UserNotification[]>(() => loadJSON('bp_notifications_v1', [] as UserNotification[]));
+  const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(() => loadJSON('bp_broadcasts_v1', [] as NotificationLog[]));
+  const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => loadJSON('bp_improvements_v1', [] as ImprovementItem[]));
 
   // ---------- Project Management state ----------
-  const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, INITIAL_MANAGED_PROJECTS));
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadJSON(STORAGE.teamMembers, INITIAL_TEAM_MEMBERS));
-  const [transcripts, setTranscripts] = useState<MeetingTranscript[]>(() => loadJSON(STORAGE.transcripts, INITIAL_TRANSCRIPTS));
-  const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(() => loadJSON(STORAGE.meetingNotes, INITIAL_MEETING_NOTES));
-  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() => loadJSON(STORAGE.ganttTasks, INITIAL_GANTT_TASKS));
-  const [projectOkrs, setProjectOkrs] = useState<ProjectOKR[]>(() => loadJSON(STORAGE.projectOkrs, INITIAL_PROJECT_OKRS));
+  const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, [] as ManagedProject[]));
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadJSON(STORAGE.teamMembers, [] as TeamMember[]));
+  const [transcripts, setTranscripts] = useState<MeetingTranscript[]>(() => loadJSON(STORAGE.transcripts, [] as MeetingTranscript[]));
+  const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(() => loadJSON(STORAGE.meetingNotes, [] as MeetingNote[]));
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() => loadJSON(STORAGE.ganttTasks, [] as GanttTask[]));
+  const [projectOkrs, setProjectOkrs] = useState<ProjectOKR[]>(() => loadJSON(STORAGE.projectOkrs, [] as ProjectOKR[]));
 
   useEffect(() => {
     localStorage.setItem(STORAGE.processes, JSON.stringify(processes));
@@ -171,6 +142,26 @@ export default function App() {
   }, [profile, phase]);
 
   // ---------- Phase transitions ----------
+  const handleRemoteSignedIn = (token: string, user: RemoteUser) => {
+    sessionStorage.setItem(STORAGE.remoteToken, token);
+    const newProfile: UserProfile = {
+      name: user.name,
+      role: user.level,
+      passwordHash: '',
+      createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
+    sessionStorage.setItem(STORAGE.unlocked, 'true');
+    setProfile(newProfile);
+    setCurrentPersona(newProfile.role);
+    if (newProfile.role === 'Admin') {
+      setWorkspaceTab('admin');
+      setPhase('workspace');
+    } else {
+      setPhase('journey');
+    }
+  };
+
   const handleOnboardingComplete = (newProfile: UserProfile) => {
     localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
     sessionStorage.setItem(STORAGE.unlocked, 'true');
@@ -204,19 +195,33 @@ export default function App() {
     localStorage.removeItem(STORAGE.profile);
     localStorage.removeItem(STORAGE.phase);
     sessionStorage.removeItem(STORAGE.unlocked);
+    sessionStorage.removeItem(STORAGE.remoteToken);
     setProfile(null);
-    setPhase('landing');
+    setPhase(isRemoteEnabled() ? 'remoteLogin' : 'landing');
   };
 
   const handleLock = () => {
     sessionStorage.removeItem(STORAGE.unlocked);
-    setPhase('locked');
+    if (isRemoteEnabled()) {
+      sessionStorage.removeItem(STORAGE.remoteToken);
+      setPhase('remoteLogin');
+    } else {
+      setPhase('locked');
+    }
   };
 
   // ---------- Process actions ----------
   const handleSaveProcess = (newProcess: Process) => {
     setProcesses((prev) => {
       const exists = prev.some((p) => p.id === newProcess.id);
+      if (!exists && isRemoteEnabled()) {
+        const token = sessionStorage.getItem(STORAGE.remoteToken);
+        if (token) {
+          submitRemoteProcess(token, mapProcessToRemoteInput(newProcess)).catch((err) => {
+            console.warn('Blueprint: failed to sync process to Postgres', err);
+          });
+        }
+      }
       return exists ? prev.map((p) => (p.id === newProcess.id ? newProcess : p)) : [newProcess, ...prev];
     });
   };
@@ -306,6 +311,10 @@ export default function App() {
 
   const handleAddProject = (newProj: ManagedProject) => {
     setManagedProjects((prev) => [newProj, ...prev]);
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    setManagedProjects((prev) => prev.filter((p) => p.id !== projectId));
   };
 
   const handleAddTeamMember = (member: TeamMember) => {
@@ -472,6 +481,10 @@ export default function App() {
   };
 
   // ---------- Render current phase ----------
+  if (phase === 'remoteLogin') {
+    return <RemoteLogin onSignedIn={handleRemoteSignedIn} />;
+  }
+
   if (phase === 'landing') {
     return <LandingPage onStart={() => setPhase('onboarding')} />;
   }
@@ -537,6 +550,7 @@ export default function App() {
         projectOkrs={projectOkrs}
         onUpdateProject={handleUpdateProject}
         onAddProject={handleAddProject}
+        onDeleteProject={handleDeleteProject}
         onAddTeamMember={handleAddTeamMember}
         onRemoveTeamMember={handleRemoveTeamMember}
         onAddTranscript={handleAddTranscript}
@@ -554,5 +568,7 @@ export default function App() {
   }
 
   // Fallback — inconsistent persisted state, restart cleanly.
-  return <LandingPage onStart={() => setPhase('onboarding')} />;
+  return isRemoteEnabled()
+    ? <RemoteLogin onSignedIn={handleRemoteSignedIn} />
+    : <LandingPage onStart={() => setPhase('onboarding')} />;
 }
