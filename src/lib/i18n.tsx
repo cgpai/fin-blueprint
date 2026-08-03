@@ -121,6 +121,7 @@ const en: Dict = {
   'landing.startNow': 'Start now',
   'landing.footer': 'Blueprint · Finance Process Catalogue · Project Vanguard',
   'landing.errLoading': 'User list is still loading. Try again in a moment.',
+  'landing.errSync': 'Could not reach the shared user directory. Check your connection and try again.',
   'landing.errNotRegistered': 'Email is not registered yet.',
   'landing.errMismatch': 'Email or password did not match.',
 
@@ -418,6 +419,7 @@ const id: Dict = {
   'landing.startNow': 'Mulai sekarang',
   'landing.footer': 'Blueprint · Katalog Proses Keuangan · Project Vanguard',
   'landing.errLoading': 'Daftar pengguna masih dimuat. Coba lagi sebentar.',
+  'landing.errSync': 'Tidak bisa menghubungi direktori pengguna bersama. Periksa koneksi lalu coba lagi.',
   'landing.errNotRegistered': 'Email belum terdaftar.',
   'landing.errMismatch': 'Email atau kata sandi tidak cocok.',
 

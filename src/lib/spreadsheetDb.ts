@@ -18,9 +18,20 @@ export interface AppSnapshot {
   improvementItems: ImprovementItem[];
 }
 
-const endpoint = import.meta.env.VITE_SHEETS_ENDPOINT as string | undefined;
+const rawEndpoint = (import.meta.env.VITE_SHEETS_ENDPOINT as string | undefined)?.trim();
+/** Reject redacted/placeholder values (e.g. Vercel "sensitive" env pulled as `[SENSITIVE]`). */
+const endpoint =
+  rawEndpoint &&
+  rawEndpoint !== '[SENSITIVE]' &&
+  /^https?:\/\//i.test(rawEndpoint)
+    ? rawEndpoint
+    : undefined;
 
 export const spreadsheetEnabled = Boolean(endpoint);
+
+export function getSheetsEndpoint(): string | undefined {
+  return endpoint;
+}
 
 function profileKey(profile: UserProfile | null): string | null {
   if (!profile) return null;
@@ -52,7 +63,11 @@ export async function loadSnapshot(): Promise<Partial<AppSnapshot> | null> {
   if (!endpoint) return null;
   const res = await fetch(`${endpoint}?action=getState`, { method: 'GET' });
   if (!res.ok) throw new Error(`Spreadsheet load failed (${res.status})`);
-  return (await res.json()) as Partial<AppSnapshot>;
+  const data = (await res.json()) as Partial<AppSnapshot> & { ok?: boolean; error?: string };
+  if (data && data.ok === false) {
+    throw new Error(data.error || 'Spreadsheet getState failed');
+  }
+  return data;
 }
 
 export async function saveSnapshot(snapshot: AppSnapshot): Promise<void> {

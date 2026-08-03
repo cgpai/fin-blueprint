@@ -24,10 +24,12 @@ export default function LandingPage({
   onStart,
   registeredProfiles,
   onLogin,
+  sheetsSync = 'off',
 }: {
   onStart: () => void;
   registeredProfiles: UserProfile[];
   onLogin: (profile: UserProfile) => void;
+  sheetsSync?: 'off' | 'loading' | 'ok' | 'error';
 }) {
   const t = useT();
   const { locale } = useLocale();
@@ -71,8 +73,16 @@ export default function LandingPage({
   };
 
   const continueToPassword = () => {
-    if (registeredProfiles.length === 0) {
+    if (sheetsSync === 'loading') {
       setError(t('landing.errLoading'));
+      return;
+    }
+    if (sheetsSync === 'error') {
+      setError(t('landing.errSync'));
+      return;
+    }
+    if (registeredProfiles.length === 0) {
+      setError(t('landing.errNotRegistered'));
       return;
     }
     const found = registeredProfiles.some((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());

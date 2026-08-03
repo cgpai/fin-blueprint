@@ -42,12 +42,29 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      # Vercel "sensitive" env vars pull as `[SENSITIVE]` and break Vite client builds.
+      # Force the real Sheets URL from GitHub secret so Sign in can load profiles.
+      - name: Ensure Sheets endpoint for Vite build
+        run: |
+          set -euo pipefail
+          ENV_FILE=".vercel/.env.production.local"
+          touch "$ENV_FILE"
+          grep -v '^VITE_SHEETS_ENDPOINT=' "$ENV_FILE" > "${ENV_FILE}.tmp" || true
+          mv "${ENV_FILE}.tmp" "$ENV_FILE"
+          echo "VITE_SHEETS_ENDPOINT=\"${VITE_SHEETS_ENDPOINT}\"" >> "$ENV_FILE"
+          # Sanity: must be a real URL, never the redaction placeholder
+          grep -E '^VITE_SHEETS_ENDPOINT="https://' "$ENV_FILE"
+          ! grep -F 'VITE_SHEETS_ENDPOINT="[SENSITIVE]"' "$ENV_FILE"
+        env:
+          VITE_SHEETS_ENDPOINT: ${{ secrets.VITE_SHEETS_ENDPOINT }}
+
       - name: Build (local prebuilt)
         run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_SHEETS_ENDPOINT: ${{ secrets.VITE_SHEETS_ENDPOINT }}
 
       # Deploy from a copy without .git so Hobby "git author must be team member" does not block.
       - name: Deploy production

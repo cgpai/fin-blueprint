@@ -89,6 +89,10 @@ export default function App() {
   const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => loadJSON('bp_improvements_v1', [] as ImprovementItem[]));
   const [registeredProfiles, setRegisteredProfiles] = useState<UserProfile[]>([]);
   const [remoteReady, setRemoteReady] = useState(!spreadsheetEnabled);
+  /** `loading` while first Sheets fetch runs; `error` if it fails; `ok` once profiles are trusted. */
+  const [sheetsSync, setSheetsSync] = useState<'off' | 'loading' | 'ok' | 'error'>(
+    spreadsheetEnabled ? 'loading' : 'off',
+  );
 
   // ---------- Project Management state ----------
   const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, [] as ManagedProject[]));
@@ -100,9 +104,13 @@ export default function App() {
 
   useEffect(() => {
     if (!spreadsheetEnabled) return;
+    setSheetsSync('loading');
     loadSnapshot()
       .then((remote) => {
-        if (!remote) return;
+        if (!remote) {
+          setSheetsSync('error');
+          return;
+        }
         const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
         if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
         if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
@@ -113,8 +121,12 @@ export default function App() {
         if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
         if (remote.improvementItems) setImprovementItems(remote.improvementItems);
         if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+        setSheetsSync('ok');
       })
-      .catch((err) => console.error('Spreadsheet sync load failed:', err))
+      .catch((err) => {
+        console.error('Spreadsheet sync load failed:', err);
+        setSheetsSync('error');
+      })
       .finally(() => setRemoteReady(true));
   }, []);
 
@@ -157,7 +169,8 @@ export default function App() {
   }, [phase]);
 
   useEffect(() => {
-    if (!spreadsheetEnabled || !remoteReady) return;
+    // Never save until Sheets load succeeded — avoids racing an empty local profile map over a failed sync.
+    if (!spreadsheetEnabled || !remoteReady || sheetsSync !== 'ok') return;
     const persistedPhase = phase === 'journey' || phase === 'workspace' ? phase : localStorage.getItem(STORAGE.phase);
     const snapshot: AppSnapshot = {
       profile,
@@ -175,7 +188,7 @@ export default function App() {
       saveSnapshot(snapshot).catch((err) => console.error('Spreadsheet sync save failed:', err));
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady]);
+  }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady, sheetsSync]);
 
   // Super-admin runs the programme — never the staff capture journey.
   useEffect(() => {
@@ -553,6 +566,7 @@ export default function App() {
         onStart={() => setPhase('onboarding')}
         registeredProfiles={registeredProfiles}
         onLogin={handleLandingLogin}
+        sheetsSync={sheetsSync}
       />
     );
   }
@@ -649,6 +663,7 @@ export default function App() {
         onStart={() => setPhase('onboarding')}
         registeredProfiles={registeredProfiles}
         onLogin={handleLandingLogin}
+        sheetsSync={sheetsSync}
       />
     );
 }
