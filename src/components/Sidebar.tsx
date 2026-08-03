@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Persona } from '../types';
+import { useT } from '../lib/i18n';
 
 export interface NavItem {
   id: string;
@@ -19,22 +20,16 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['L1', 'L2', 'L3'] },
-  { id: 'catalogue', label: 'Catalogue', icon: BookOpen, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
-  { id: 'prd_hub', label: 'Consolidated PRD Hub', icon: FileText, roles: ['L2', 'Admin'] },
-  { id: 'capture', label: 'Capture a process', icon: PlusCircle, roles: ['L1', 'L2', 'L3', 'L4'] },
-  { id: 'refinement', label: 'AI Refinement', icon: Sparkles, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
-  { id: 'notifications', label: 'Project Management', icon: FolderKanban, roles: ['L2', 'L3', 'L4', 'Admin'] },
-  { id: 'admin', label: 'Programme admin', icon: ShieldCheck, roles: ['Admin'] },
+  { id: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard, roles: ['L1', 'L2', 'L3'] },
+  { id: 'catalogue', label: 'nav.catalogue', icon: BookOpen, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
+  { id: 'prd_hub', label: 'nav.prdHub', icon: FileText, roles: ['L2', 'Admin'] },
+  { id: 'capture', label: 'nav.capture', icon: PlusCircle, roles: ['L1', 'L2', 'L3', 'L4'] },
+  { id: 'refinement', label: 'nav.refinement', icon: Sparkles, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
+  { id: 'notifications', label: 'nav.projects', icon: FolderKanban, roles: ['L2', 'L3', 'L4', 'Admin'] },
+  { id: 'admin', label: 'nav.admin', icon: ShieldCheck, roles: ['Admin'] },
 ];
 
-const PERSONA_LABELS: Record<Persona, string> = {
-  L1: 'CFO',
-  L2: 'GM / Head',
-  L3: 'Manager',
-  L4: 'Executor',
-  Admin: 'Admin',
-};
+const PERSONA_KEYS: Persona[] = ['L1', 'L2', 'L3', 'L4', 'Admin'];
 
 export default function Sidebar({
   currentTab,
@@ -55,6 +50,7 @@ export default function Sidebar({
   onLock: () => void;
   profileRole: Persona;
 }) {
+  const t = useT();
   const items = NAV_ITEMS.filter((item) => item.roles.includes(currentPersona));
 
   return (
@@ -63,8 +59,8 @@ export default function Sidebar({
         {/* Brand — clicking the logo opens the process documentation (catalogue) */}
         <button
           onClick={() => setCurrentTab('catalogue')}
-          title="Blueprint — go to the process catalogue"
-          aria-label="Blueprint — go to the process catalogue"
+          title={t('nav.brandCatalogue')}
+          aria-label={t('nav.brandCatalogue')}
           className="w-11 h-11 rounded-full bg-ink text-citron grid place-items-center mb-2 shrink-0 cursor-pointer transition-transform hover:scale-105"
         >
           <Sparkles size={17} />
@@ -74,6 +70,7 @@ export default function Sidebar({
         <nav className="flex flex-col items-center gap-1.5">
           {items.map((item) => {
             const active = currentTab === item.id;
+            const label = t(item.label);
             const badge =
               item.id === 'notifications' && (currentPersona === 'L2' || currentPersona === 'L3')
                 ? unreadNotifications
@@ -82,8 +79,8 @@ export default function Sidebar({
               <button
                 key={item.id}
                 onClick={() => (item.id === 'capture' ? onCaptureNew() : setCurrentTab(item.id))}
-                title={item.label}
-                aria-label={item.label}
+                title={label}
+                aria-label={label}
                 className={`relative w-11 h-11 rounded-full grid place-items-center transition-all cursor-pointer ${
                   active
                     ? 'bg-ink text-white shadow-lift'
@@ -105,13 +102,13 @@ export default function Sidebar({
 
         {/* Demo persona switcher - Restricted to Admin & L1 */}
         {(profileRole === 'Admin' || profileRole === 'L1') && (
-          <div className="flex flex-col items-center gap-1 pb-1" title="Demo: view the app as another role">
-            <span className="text-[9px] font-bold text-faint tracking-wide">VIEW AS</span>
-            {(['L1', 'L2', 'L3', 'L4', 'Admin'] as Persona[]).map((level) => (
+          <div className="flex flex-col items-center gap-1 pb-1" title={t('nav.demoPersona')}>
+            <span className="text-[9px] font-bold text-faint tracking-wide">{t('nav.viewAs')}</span>
+            {PERSONA_KEYS.map((level) => (
               <button
                 key={level}
                 onClick={() => setPersona(level)}
-                title={`View as ${PERSONA_LABELS[level]} (${level})`}
+                title={t('nav.viewAsRole', { role: t(`persona.${level}`), level })}
                 className={`w-8 h-8 rounded-full text-[10px] font-bold grid place-items-center transition-all cursor-pointer ${
                   currentPersona === level ? 'bg-veil text-ink' : 'text-faint hover:bg-white/80 hover:text-ink'
                 }`}
@@ -124,8 +121,8 @@ export default function Sidebar({
 
         <button
           onClick={onLock}
-          title="Lock your space"
-          aria-label="Lock your space"
+          title={t('nav.lock')}
+          aria-label={t('nav.lock')}
           className="w-11 h-11 rounded-full grid place-items-center text-mute hover:bg-white/80 hover:text-ink transition-all cursor-pointer shrink-0"
         >
           <LockKeyhole size={17} />

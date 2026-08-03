@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BellRing, CircleCheck, Flame, Lightbulb, Plus } from 'lucide-react';
 import { ImprovementItem, Process } from '../types';
 import { CLASSIFICATION_META, uid } from '../lib/utils';
+import { useT } from '../lib/i18n';
 import { Avatar, Meter, Stat } from './ui';
 
 const STATUS_FLOW: ImprovementItem['status'][] = ['Identified', 'In Progress', 'Resolved'];
@@ -20,7 +21,14 @@ export default function DashboardManager({
   onUpdateImprovementItem: (item: ImprovementItem) => void;
   onTriggerReminder: (email: string, subject: string, msg: string) => void;
 }) {
+  const t = useT();
   const [remindedEmails, setRemindedEmails] = useState<string[]>([]);
+
+  const statusLabel = (status: 'Complete' | 'In progress' | 'Not started') => {
+    if (status === 'Complete') return t('dash.mgr.complete');
+    if (status === 'In progress') return t('dash.mgr.inProgress');
+    return t('dash.mgr.notStarted');
+  };
 
   // Roster from real process owners — no hardcoded user list.
   const rosterMap = new Map<string, { name: string; email: string; owned: Process[] }>();
@@ -65,43 +73,43 @@ export default function DashboardManager({
 
   return (
     <div className="animate-fade-up space-y-5">
-      <h2 className="font-display text-xl font-semibold tracking-tight">Team space</h2>
+      <h2 className="font-display text-xl font-semibold tracking-tight">{t('dash.mgr.title')}</h2>
 
       <div className="grid sm:grid-cols-3 gap-4 print:break-inside-avoid">
-        <Stat label="Team completion" value={`${completionPct}%`} hint="of personnel fully documented" accent="citron" />
-        <Stat label="High-effort workflows" value={highEffort.length} hint="flagged for improvement" accent="veil" />
-        <Stat label="Guidance items" value={improvementItems.filter((i) => i.status !== 'Resolved').length} hint="open vs resolved tracked below" />
+        <Stat label={t('dash.mgr.completion')} value={`${completionPct}%`} hint={t('dash.mgr.completionHint')} accent="citron" />
+        <Stat label={t('dash.mgr.highEffort')} value={highEffort.length} hint={t('dash.mgr.highEffortHint')} accent="veil" />
+        <Stat label={t('dash.mgr.guidance')} value={improvementItems.filter((i) => i.status !== 'Resolved').length} hint={t('dash.mgr.guidanceHint')} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Personnel completion tracker */}
         <div className="card p-6 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <CircleCheck size={15} className="text-citron-deep" /> Personnel documentation tracker
+            <CircleCheck size={15} className="text-citron-deep" /> {t('dash.mgr.tracker')}
           </h3>
           <ul className="mt-4 space-y-3.5">
             {roster.length === 0 && (
-              <li className="text-xs text-mute">No process owners yet — roster fills as staff capture processes.</li>
+              <li className="text-xs text-mute">{t('dash.mgr.emptyRoster')}</li>
             )}
             {roster.map(({ user, owned, status }) => (
               <li key={user.email || user.name} className="flex items-center gap-3">
                 <Avatar name={user.name} size={32} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{user.name}</div>
-                  <div className="text-[11px] text-faint truncate">{user.email || 'No email'} · {owned.length} process{owned.length === 1 ? '' : 'es'}</div>
+                  <div className="text-[11px] text-faint truncate">{user.email || t('dash.mgr.noEmail')} · {owned.length} process{owned.length === 1 ? '' : 'es'}</div>
                 </div>
                 <span
                   className={`chip border-transparent ${
                     status === 'Complete' ? 'bg-citron-soft text-citron-deep' : status === 'In progress' ? 'bg-veil-soft text-veil-deep' : 'bg-blush/60 text-warn'
                   }`}
                 >
-                  {status}
+                  {statusLabel(status)}
                 </span>
                 {status !== 'Complete' && user.email && (
                   <button
                     className="btn-ghost !p-2 shrink-0 disabled:opacity-40 print:hidden"
-                    title={remindedEmails.includes(user.email) ? 'Reminder sent' : 'Send a reminder'}
-                    aria-label={`Remind ${user.name}`}
+                    title={remindedEmails.includes(user.email) ? t('dash.mgr.reminded') : t('dash.mgr.remind')}
+                    aria-label={`${t('dash.mgr.remind')} ${user.name}`}
                     disabled={remindedEmails.includes(user.email)}
                     onClick={() => {
                       onTriggerReminder(
@@ -123,7 +131,7 @@ export default function DashboardManager({
         {/* High-effort flags */}
         <div className="card p-6 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <Flame size={15} className="text-warn" /> High-effort workflows
+            <Flame size={15} className="text-warn" /> {t('dash.mgr.highTitle')}
           </h3>
           <p className="text-xs text-mute mt-0.5">Flagged by effort and automation suitability — accept a recommendation to track it.</p>
           <ul className="mt-4 space-y-3">
@@ -146,10 +154,10 @@ export default function DashboardManager({
                     Recommended: <strong>{(proc.automationSuitability ?? 0) >= 80 ? 'Automation' : 'Agentic AI'}</strong>
                   </span>
                   {tracked.has(proc.id) ? (
-                    <span className="text-[11px] font-semibold text-ok">Tracked ✓</span>
+                    <span className="text-[11px] font-semibold text-ok">{t('dash.mgr.tracked')} ✓</span>
                   ) : (
                     <button className="btn-ghost !py-1.5 !px-3 !text-[11px] print:hidden" onClick={() => acceptRecommendation(proc)}>
-                      <Plus size={11} /> Track improvement
+                      <Plus size={11} /> {t('dash.mgr.track')}
                     </button>
                   )}
                 </div>
@@ -162,7 +170,7 @@ export default function DashboardManager({
       {/* Improvement / guidance tracker */}
       <div className="card p-6 print:break-inside-avoid">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <Lightbulb size={15} className="text-veil-deep" /> Improvement &amp; guidance tracker
+          <Lightbulb size={15} className="text-veil-deep" /> {t('dash.mgr.board')}
         </h3>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">

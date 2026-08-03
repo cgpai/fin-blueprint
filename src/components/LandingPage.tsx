@@ -18,38 +18,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { hashPassword } from '../lib/utils';
-
-const HOW_IT_WORKS = [
-  {
-    icon: Fingerprint,
-    title: 'Tell us about you',
-    body: 'Your role, your name, and a password so only you can come back to your work.',
-  },
-  {
-    icon: AudioLines,
-    title: 'Capture your process',
-    body: 'Upload working outputs, type, or just talk — describe how you actually work.',
-  },
-  {
-    icon: ScanSearch,
-    title: 'AI mines & refines',
-    body: 'The understanding agent counts, expands and classifies every step for you.',
-  },
-  {
-    icon: ChartNoAxesColumn,
-    title: 'See what’s next',
-    body: 'Dashboards, a living catalogue, and concrete improvement advice per workflow.',
-  },
-];
-
-const CAPABILITIES = [
-  { icon: BookOpen, title: 'Living process catalogue', body: 'Every documented workflow in one structured, searchable place.' },
-  { icon: Sparkles, title: 'AI refinement & classification', body: 'Steps labelled agentic-AI, automation, or human-in-the-loop — with the reasoning shown.' },
-  { icon: LayoutDashboard, title: 'Role-scoped dashboards', body: 'Directorate views for the CFO, subfunction maps for leads, completion tracking for managers.' },
-  { icon: Lightbulb, title: 'Improvement advice', body: 'High-effort workflows flagged with recommended solutions and tracked outcomes.' },
-  { icon: UsersRound, title: 'Collaboration built-in', body: 'Tag teammates on shared tasks so nothing is double-recorded.' },
-  { icon: MessagesSquare, title: 'Targeted notifications', body: 'Reach people by level or line-of-work when detail is missing.' },
-];
+import { LanguageToggle, classLabel, useLocale, useT } from '../lib/i18n';
 
 export default function LandingPage({
   onStart,
@@ -60,6 +29,8 @@ export default function LandingPage({
   registeredProfiles: UserProfile[];
   onLogin: (profile: UserProfile) => void;
 }) {
+  const t = useT();
+  const { locale } = useLocale();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -67,6 +38,28 @@ export default function LandingPage({
   const [signInStep, setSignInStep] = useState<'email' | 'password'>('email');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+
+  const howItWorks = [
+    { icon: Fingerprint, title: t('landing.how1Title'), body: t('landing.how1Body') },
+    { icon: AudioLines, title: t('landing.how2Title'), body: t('landing.how2Body') },
+    { icon: ScanSearch, title: t('landing.how3Title'), body: t('landing.how3Body') },
+    { icon: ChartNoAxesColumn, title: t('landing.how4Title'), body: t('landing.how4Body') },
+  ];
+
+  const capabilities = [
+    { icon: BookOpen, title: t('landing.cap1Title'), body: t('landing.cap1Body') },
+    { icon: Sparkles, title: t('landing.cap2Title'), body: t('landing.cap2Body') },
+    { icon: LayoutDashboard, title: t('landing.cap3Title'), body: t('landing.cap3Body') },
+    { icon: Lightbulb, title: t('landing.cap4Title'), body: t('landing.cap4Body') },
+    { icon: UsersRound, title: t('landing.cap5Title'), body: t('landing.cap5Body') },
+    { icon: MessagesSquare, title: t('landing.cap6Title'), body: t('landing.cap6Body') },
+  ];
+
+  const demoSteps = [
+    { nameKey: 'landing.demo1', cls: 'automation' as const, tagClass: 'bg-citron text-ink' },
+    { nameKey: 'landing.demo2', cls: 'agentic-ai' as const, tagClass: 'bg-veil text-ink' },
+    { nameKey: 'landing.demo3', cls: 'human-in-the-loop' as const, tagClass: 'bg-blush text-ink' },
+  ];
 
   const openSignIn = () => {
     setEmail('');
@@ -79,12 +72,12 @@ export default function LandingPage({
 
   const continueToPassword = () => {
     if (registeredProfiles.length === 0) {
-      setError('User list is still loading. Try again in a moment.');
+      setError(t('landing.errLoading'));
       return;
     }
     const found = registeredProfiles.some((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
     if (!found) {
-      setError('Email is not registered yet.');
+      setError(t('landing.errNotRegistered'));
       return;
     }
     setError('');
@@ -100,7 +93,7 @@ export default function LandingPage({
     if (profile && profile.passwordHash === hash) {
       onLogin(profile);
     } else {
-      setError('Email or password did not match.');
+      setError(t('landing.errMismatch'));
     }
     setChecking(false);
   };
@@ -117,15 +110,16 @@ export default function LandingPage({
             Blueprint
           </div>
           <div className="hidden sm:flex items-center gap-5 text-sm font-medium text-inksoft">
-            <a href="#how" className="hover:text-ink transition-colors">How it works</a>
-            <a href="#capabilities" className="hover:text-ink transition-colors">Capabilities</a>
+            <a href="#how" className="hover:text-ink transition-colors">{t('landing.how')}</a>
+            <a href="#capabilities" className="hover:text-ink transition-colors">{t('landing.capabilities')}</a>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageToggle />
             <button onClick={onStart} className="btn-dark !py-2 !px-4 text-xs">
-              Sign up
+              {t('landing.signUp')}
             </button>
             <button onClick={openSignIn} className="btn-ghost !py-2 !px-4 text-xs">
-              Sign in
+              {t('landing.signIn')}
             </button>
           </div>
         </div>
@@ -140,17 +134,17 @@ export default function LandingPage({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-display text-lg font-semibold tracking-tight">Sign in</h2>
-                <p className="text-xs text-mute mt-0.5">Open your saved Blueprint workspace.</p>
+                <h2 className="font-display text-lg font-semibold tracking-tight">{t('landing.signInTitle')}</h2>
+                <p className="text-xs text-mute mt-0.5">{t('landing.signInSub')}</p>
               </div>
-              <button className="btn-ghost !p-2 !rounded-full" onClick={() => setSignInOpen(false)} aria-label="Close sign in">
+              <button className="btn-ghost !p-2 !rounded-full" onClick={() => setSignInOpen(false)} aria-label={t('landing.closeSignIn')}>
                 <X size={14} />
               </button>
             </div>
 
             {signInStep === 'email' ? (
               <div className="mt-5">
-                <label className="label" htmlFor="signin-email">Email</label>
+                <label className="label" htmlFor="signin-email">{t('common.email')}</label>
                 <input
                   id="signin-email"
                   className="field"
@@ -168,20 +162,20 @@ export default function LandingPage({
                 />
                 {error && <div className="text-xs text-bad mt-2">{error}</div>}
                 <button className="btn-dark w-full mt-4" disabled={!email.trim()} onClick={continueToPassword}>
-                  Continue <ArrowRight size={15} />
+                  {t('landing.continue')} <ArrowRight size={15} />
                 </button>
               </div>
             ) : (
               <div className="mt-5">
                 <div className="chip bg-veil-soft border-transparent text-veil-deep mb-3">{email}</div>
-                <label className="label" htmlFor="signin-password">Password</label>
+                <label className="label" htmlFor="signin-password">{t('common.password')}</label>
                 <div className="relative">
                   <input
                     id="signin-password"
                     className="field pr-11"
                     type={showPassword ? 'text' : 'password'}
                     autoFocus
-                    placeholder="Password"
+                    placeholder={t('common.password')}
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
@@ -195,7 +189,7 @@ export default function LandingPage({
                     type="button"
                     className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost !p-2 !rounded-full"
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? t('common.hidePassword') : t('common.showPassword')}
                   >
                     {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -203,13 +197,13 @@ export default function LandingPage({
                 {error && <div className="text-xs text-bad mt-2">{error}</div>}
                 <div className="mt-4 flex gap-2">
                   <button className="btn-ghost flex-1" onClick={() => setSignInStep('email')}>
-                    Back
+                    {t('common.back')}
                   </button>
                   <button className="btn-dark flex-1" disabled={!password || checking} onClick={signIn}>
-                    {checking ? 'Checking...' : 'Sign in'}
+                    {checking ? t('common.checking') : t('landing.signIn')}
                   </button>
                 </div>
-                <p className="mt-3 text-xs text-mute">Forgot password? Ask your programme admin to reset your account.</p>
+                <p className="mt-3 text-xs text-mute">{t('landing.forgot')}</p>
               </div>
             )}
           </motion.div>
@@ -220,23 +214,22 @@ export default function LandingPage({
       <header className="max-w-5xl mx-auto px-6 pt-20 pb-16 text-center">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
           <span className="chip bg-citron-soft border-transparent text-citron-deep mb-6 inline-flex">
-            <Sparkles size={12} /> Native-AI transformation · Project Vanguard
+            <Sparkles size={12} /> {t('landing.chip')}
           </span>
           <h1 className="font-display font-semibold tracking-tight text-5xl sm:text-6xl leading-[1.05] text-ink">
-            Map how you really work.
+            {t('landing.hero1')}
             <br />
-            <span className="text-veil-deep">Let AI find what&rsquo;s next.</span>
+            <span className="text-veil-deep">{t('landing.hero2')}</span>
           </h1>
           <p className="mt-6 text-lg text-mute max-w-2xl mx-auto leading-relaxed">
-            Blueprint turns the way you work — spoken, typed, or uploaded — into a structured process
-            catalogue, then shows where agentic AI, automation, or a human touch fits best.
+            {t('landing.heroBody')}
           </p>
           <div className="mt-9 flex items-center justify-center gap-3">
             <button onClick={onStart} className="btn-dark !px-7 !py-3.5 text-base">
-              Start your journey <ArrowRight size={17} />
+              {t('landing.startJourney')} <ArrowRight size={17} />
             </button>
             <a href="#how" className="btn-ghost !px-7 !py-3.5 text-base">
-              Learn more
+              {t('landing.learnMore')}
             </a>
           </div>
         </motion.div>
@@ -250,16 +243,12 @@ export default function LandingPage({
         >
           <div className="text-xs font-semibold text-mute mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-citron animate-pulse" />
-            Understanding agent · mining your narrative
+            {t('landing.mining')}
           </div>
           <div className="space-y-3">
-            {[
-              { name: 'Retrieve patient billing records', tag: 'Automation', tagClass: 'bg-citron text-ink' },
-              { name: 'Verify tariffs against INA-CBG rules', tag: 'Agentic AI', tagClass: 'bg-veil text-ink' },
-              { name: 'Manager sign-off on exceptions', tag: 'Human-in-the-loop', tagClass: 'bg-blush text-ink' },
-            ].map((step, i) => (
+            {demoSteps.map((step, i) => (
               <motion.div
-                key={step.name}
+                key={step.nameKey}
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 + i * 0.18 }}
@@ -269,9 +258,9 @@ export default function LandingPage({
                   <span className="w-6 h-6 rounded-full bg-canvas grid place-items-center text-[11px] font-bold text-mute shrink-0">
                     {i + 1}
                   </span>
-                  <span className="text-sm font-medium truncate">{step.name}</span>
+                  <span className="text-sm font-medium truncate">{t(step.nameKey)}</span>
                 </div>
-                <span className={`chip border-transparent ${step.tagClass}`}>{step.tag}</span>
+                <span className={`chip border-transparent ${step.tagClass}`}>{classLabel(locale, step.cls)}</span>
               </motion.div>
             ))}
           </div>
@@ -280,10 +269,10 @@ export default function LandingPage({
 
       {/* How it works */}
       <section id="how" className="max-w-5xl mx-auto px-6 py-16">
-        <h2 className="font-display text-2xl font-semibold tracking-tight text-center">Four steps, no training needed</h2>
-        <p className="text-mute text-center mt-2 text-sm">From &ldquo;this is how I work&rdquo; to a transformation-ready catalogue.</p>
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-center">{t('landing.howTitle')}</h2>
+        <p className="text-mute text-center mt-2 text-sm">{t('landing.howSub')}</p>
         <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {HOW_IT_WORKS.map((item, i) => (
+          {howItWorks.map((item, i) => (
             <motion.div
               key={item.title}
               initial={{ opacity: 0, y: 16 }}
@@ -295,7 +284,7 @@ export default function LandingPage({
               <div className="w-10 h-10 rounded-full bg-veil-soft text-veil-deep grid place-items-center mb-4">
                 <item.icon size={18} />
               </div>
-              <div className="text-[11px] font-bold text-faint mb-1.5">STEP {i + 1}</div>
+              <div className="text-[11px] font-bold text-faint mb-1.5">{t('landing.step', { n: i + 1 })}</div>
               <div className="font-display font-semibold">{item.title}</div>
               <p className="text-sm text-mute mt-1.5 leading-relaxed">{item.body}</p>
             </motion.div>
@@ -307,10 +296,10 @@ export default function LandingPage({
       <section id="capabilities" className="max-w-5xl mx-auto px-6 py-16">
         <div className="card bg-ink border-transparent p-8 sm:p-12 text-white">
           <h2 className="font-display text-2xl font-semibold tracking-tight">
-            Everything the directorate needs, <span className="text-citron">in one place</span>
+            {t('landing.capTitle1')} <span className="text-citron">{t('landing.capTitle2')}</span>
           </h2>
           <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-7">
-            {CAPABILITIES.map((cap) => (
+            {capabilities.map((cap) => (
               <div key={cap.title}>
                 <div className="flex items-center gap-2.5 font-semibold text-sm">
                   <cap.icon size={16} className="text-citron shrink-0" />
@@ -325,12 +314,12 @@ export default function LandingPage({
 
       {/* Footer CTA */}
       <footer className="max-w-5xl mx-auto px-6 pb-20 pt-4 text-center">
-        <h2 className="font-display text-3xl font-semibold tracking-tight">Ready when you are.</h2>
-        <p className="text-mute mt-2 text-sm">It takes about ten minutes to document your first process.</p>
+        <h2 className="font-display text-3xl font-semibold tracking-tight">{t('landing.ready')}</h2>
+        <p className="text-mute mt-2 text-sm">{t('landing.readySub')}</p>
         <button onClick={onStart} className="btn-citron !px-7 !py-3.5 text-base mt-6">
-          Start now <ArrowRight size={17} />
+          {t('landing.startNow')} <ArrowRight size={17} />
         </button>
-        <div className="mt-14 text-xs text-faint">Blueprint · Finance Process Catalogue · Project Vanguard</div>
+        <div className="mt-14 text-xs text-faint">{t('landing.footer')}</div>
       </footer>
     </div>
   );

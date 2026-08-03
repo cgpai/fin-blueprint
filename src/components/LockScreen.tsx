@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowRight, LockKeyhole } from 'lucide-react';
 import { UserProfile } from '../types';
 import { hashPassword } from '../lib/utils';
+import { LanguageToggle, useT } from '../lib/i18n';
 import { Avatar } from './ui';
 
 export default function LockScreen({
@@ -14,6 +15,7 @@ export default function LockScreen({
   onUnlock: (updatedProfile?: UserProfile) => void;
   onStartOver: () => void;
 }) {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -32,7 +34,8 @@ export default function LockScreen({
   };
 
   return (
-    <div className="min-h-full sky-wash flex items-center justify-center px-4">
+    <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4">
+      <LanguageToggle className="mb-4" />
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -41,9 +44,11 @@ export default function LockScreen({
         <div className="flex justify-center">
           <Avatar name={profile.name} size={64} />
         </div>
-        <h1 className="font-display text-xl font-semibold tracking-tight mt-4">Welcome back, {profile.name.split(' ')[0]}</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight mt-4">
+          {t('lock.welcome', { name: profile.name.split(' ')[0] })}
+        </h1>
         <p className="text-xs text-mute mt-1.5 flex items-center justify-center gap-1.5">
-          <LockKeyhole size={12} /> Enter your password to re-open your catalogue
+          <LockKeyhole size={12} /> {t('lock.sub')}
         </p>
 
         <motion.div
@@ -55,31 +60,31 @@ export default function LockScreen({
             autoFocus
             type="password"
             className="field text-center"
-            placeholder="Password"
+            placeholder={t('common.password')}
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
               setError(false);
             }}
             onKeyDown={(e) => e.key === 'Enter' && attempt()}
-            aria-label="Password"
+            aria-label={t('common.password')}
           />
-          {error && <div className="text-xs text-bad mt-2">That password didn&rsquo;t match — try again.</div>}
+          {error && <div className="text-xs text-bad mt-2">{t('lock.badPassword')}</div>}
         </motion.div>
 
         <button className="btn-dark w-full mt-4" onClick={attempt} disabled={!password || checking}>
-          Unlock <ArrowRight size={15} />
+          {t('lock.unlock')} <ArrowRight size={15} />
         </button>
 
         <button
           onClick={() => {
-            if (confirm('Start over? This clears your local profile (your documented processes stay).')) {
+            if (confirm(t('lock.confirmReset'))) {
               onStartOver();
             }
           }}
           className="text-xs text-faint hover:text-mute mt-6 transition-colors cursor-pointer"
         >
-          Not you? Start over
+          {t('lock.notYou')}
         </button>
       </motion.div>
     </div>

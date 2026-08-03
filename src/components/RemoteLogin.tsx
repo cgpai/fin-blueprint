@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowRight, ShieldCheck, Copy } from 'lucide-react';
 import { bootstrapAdmin, remoteLogin, remoteRegister, RemoteUser } from '../lib/blueprintApi';
 import { SUBFUNCTIONS_LIST } from '../data/mockData';
+import { LanguageToggle, useT } from '../lib/i18n';
 
 type Mode = 'login' | 'register' | 'bootstrap' | 'bootstrap-result';
 
@@ -11,6 +12,7 @@ export default function RemoteLogin({
 }: {
   onSignedIn: (token: string, user: RemoteUser) => void;
 }) {
+  const t = useT();
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -71,7 +73,8 @@ export default function RemoteLogin({
 
   if (mode === 'bootstrap-result' && createdCreds) {
     return (
-      <div className="min-h-full sky-wash flex items-center justify-center px-4">
+      <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4">
+        <LanguageToggle className="mb-4" />
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -82,16 +85,16 @@ export default function RemoteLogin({
               <ShieldCheck size={22} className="text-ink" />
             </span>
           </div>
-          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">Admin account created</h1>
-          <p className="text-xs text-mute mt-1.5">Copy these now — the temporary password won&rsquo;t be shown again.</p>
+          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">{t('remote.adminCreated')}</h1>
+          <p className="text-xs text-mute mt-1.5">{t('remote.copyNow')}</p>
 
           <div className="mt-6 space-y-2 text-left">
             <div className="rounded-lg border border-line bg-white/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-mute">Username</div>
+              <div className="text-[10px] uppercase tracking-wide text-mute">{t('common.username')}</div>
               <div className="font-mono text-sm">{createdCreds.username}</div>
             </div>
             <div className="rounded-lg border border-line bg-white/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-mute">Temporary password</div>
+              <div className="text-[10px] uppercase tracking-wide text-mute">{t('remote.tempPassword')}</div>
               <div className="font-mono text-sm">{createdCreds.tempPassword}</div>
             </div>
           </div>
@@ -104,7 +107,7 @@ export default function RemoteLogin({
               setMode('login');
             }}
           >
-            <Copy size={15} /> Continue to sign in
+            <Copy size={15} /> {t('remote.continueSignIn')}
           </button>
         </motion.div>
       </div>
@@ -113,7 +116,8 @@ export default function RemoteLogin({
 
   if (mode === 'bootstrap') {
     return (
-      <div className="min-h-full sky-wash flex items-center justify-center px-4">
+      <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4">
+        <LanguageToggle className="mb-4" />
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -124,10 +128,8 @@ export default function RemoteLogin({
               <ShieldCheck size={22} className="text-ink" />
             </span>
           </div>
-          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">Set up the Admin account</h1>
-          <p className="text-xs text-mute mt-1.5">
-            This only works once, before any account exists. Staff should use Register afterwards.
-          </p>
+          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">{t('remote.bootstrapTitle')}</h1>
+          <p className="text-xs text-mute mt-1.5">{t('remote.bootstrapSub')}</p>
 
           <motion.div
             animate={error ? { x: [0, -8, 8, -5, 5, 0] } : {}}
@@ -137,27 +139,27 @@ export default function RemoteLogin({
             <input
               autoFocus
               className="field text-center"
-              placeholder="Your full name"
+              placeholder={t('remote.placeholderName')}
               value={name}
               onChange={(e) => { setName(e.target.value); setError(''); }}
-              aria-label="Full name"
+              aria-label={t('common.fullName')}
             />
             <input
               className="field text-center"
-              placeholder="Your work email"
+              placeholder={t('remote.placeholderEmail')}
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && attemptBootstrap()}
-              aria-label="Work email"
+              aria-label={t('common.workEmail')}
             />
             {error && <div className="text-xs text-bad">{error}</div>}
           </motion.div>
 
           <button className="btn-dark w-full mt-5" onClick={attemptBootstrap} disabled={!name || !email || checking}>
-            {checking ? 'Creating…' : 'Create Admin account'} <ArrowRight size={15} />
+            {checking ? t('common.creating') : t('remote.createAdmin')} <ArrowRight size={15} />
           </button>
           <button className="text-xs text-mute mt-4 underline" onClick={() => { setMode('login'); setError(''); }}>
-            Back to sign in
+            {t('remote.backSignIn')}
           </button>
         </motion.div>
       </div>
@@ -166,7 +168,8 @@ export default function RemoteLogin({
 
   if (mode === 'register') {
     return (
-      <div className="min-h-full sky-wash flex items-center justify-center px-4">
+      <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4">
+        <LanguageToggle className="mb-4" />
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -177,8 +180,8 @@ export default function RemoteLogin({
               <ShieldCheck size={22} className="text-ink" />
             </span>
           </div>
-          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">Create your account</h1>
-          <p className="text-xs text-mute mt-1.5">Register with your work email — saved to the programme database.</p>
+          <h1 className="font-display text-xl font-semibold tracking-tight mt-4">{t('remote.registerTitle')}</h1>
+          <p className="text-xs text-mute mt-1.5">{t('remote.registerSub')}</p>
 
           <motion.div
             animate={error ? { x: [0, -8, 8, -5, 5, 0] } : {}}
@@ -188,34 +191,34 @@ export default function RemoteLogin({
             <input
               autoFocus
               className="field"
-              placeholder="Full name"
+              placeholder={t('common.fullName')}
               value={name}
               onChange={(e) => { setName(e.target.value); setError(''); }}
-              aria-label="Full name"
+              aria-label={t('common.fullName')}
             />
             <input
               className="field"
               type="email"
-              placeholder="Work email"
+              placeholder={t('common.workEmail')}
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
-              aria-label="Work email"
+              aria-label={t('common.workEmail')}
             />
             <input
               className="field"
               type="password"
-              placeholder="Password (min 8 characters)"
+              placeholder={t('remote.placeholderPass')}
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && attemptRegister()}
-              aria-label="Password"
+              aria-label={t('common.password')}
             />
-            <select className="field cursor-pointer" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Role level">
+            <select className="field cursor-pointer" value={level} onChange={(e) => setLevel(e.target.value)} aria-label={t('remote.roleLevel')}>
               {(['L4', 'L3', 'L2', 'L1'] as const).map((l) => (
                 <option key={l} value={l}>{l}</option>
               ))}
             </select>
-            <select className="field cursor-pointer" value={subFunction} onChange={(e) => setSubFunction(e.target.value)} aria-label="Line of work">
+            <select className="field cursor-pointer" value={subFunction} onChange={(e) => setSubFunction(e.target.value)} aria-label={t('remote.lineOfWork')}>
               {SUBFUNCTIONS_LIST.map((sf) => (
                 <option key={sf} value={sf}>{sf}</option>
               ))}
@@ -228,10 +231,10 @@ export default function RemoteLogin({
             onClick={attemptRegister}
             disabled={!name || !email || password.length < 8 || checking}
           >
-            {checking ? 'Creating…' : 'Register & sign in'} <ArrowRight size={15} />
+            {checking ? t('common.creating') : t('remote.registerCta')} <ArrowRight size={15} />
           </button>
           <button className="text-xs text-mute mt-4 underline" onClick={() => { setMode('login'); setError(''); }}>
-            Already have an account? Sign in
+            {t('remote.haveAccount')}
           </button>
         </motion.div>
       </div>
@@ -239,7 +242,8 @@ export default function RemoteLogin({
   }
 
   return (
-    <div className="min-h-full sky-wash flex items-center justify-center px-4">
+    <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4">
+      <LanguageToggle className="mb-4" />
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -251,7 +255,7 @@ export default function RemoteLogin({
           </span>
         </div>
         <h1 className="font-display text-xl font-semibold tracking-tight mt-4">Blueprint</h1>
-        <p className="text-xs text-mute mt-1.5">Sign in with your programme username and password.</p>
+        <p className="text-xs text-mute mt-1.5">{t('remote.signInSub')}</p>
 
         <motion.div
           animate={error ? { x: [0, -8, 8, -5, 5, 0] } : {}}
@@ -261,32 +265,32 @@ export default function RemoteLogin({
           <input
             autoFocus
             className="field text-center"
-            placeholder="Username"
+            placeholder={t('common.username')}
             value={username}
             onChange={(e) => { setUsername(e.target.value); setError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && attemptLogin()}
-            aria-label="Username"
+            aria-label={t('common.username')}
           />
           <input
             type="password"
             className="field text-center"
-            placeholder="Password"
+            placeholder={t('common.password')}
             value={password}
             onChange={(e) => { setPassword(e.target.value); setError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && attemptLogin()}
-            aria-label="Password"
+            aria-label={t('common.password')}
           />
           {error && <div className="text-xs text-bad">{error}</div>}
         </motion.div>
 
         <button className="btn-dark w-full mt-5" onClick={attemptLogin} disabled={!username || !password || checking}>
-          {checking ? 'Signing in…' : 'Sign in'} <ArrowRight size={15} />
+          {checking ? t('common.signingIn') : t('landing.signIn')} <ArrowRight size={15} />
         </button>
         <button className="text-xs text-mute mt-4 underline block w-full" onClick={() => { setMode('register'); setError(''); setPassword(''); }}>
-          New here? Create an account
+          {t('remote.newHere')}
         </button>
         <button className="text-xs text-faint mt-2 underline" onClick={() => { setMode('bootstrap'); setError(''); }}>
-          First time programme setup? Create the Admin account
+          {t('remote.firstSetup')}
         </button>
       </motion.div>
     </div>

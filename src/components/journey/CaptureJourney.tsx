@@ -18,27 +18,28 @@ import {
 } from '../../types';
 import { computeCompleteness, stepGaps, uid } from '../../lib/utils';
 import { SUBFUNCTIONS_LIST } from '../../data/mockData';
+import { useT } from '../../lib/i18n';
 
 type Stage = 'upload' | 'describe' | 'interview' | 'mining' | 'review' | 'recap';
 
-const STAGE_RAIL: Array<{ id: Stage; label: string; icon: typeof UploadCloud }> = [
-  { id: 'upload', label: 'Outputs', icon: UploadCloud },
-  { id: 'describe', label: 'Describe', icon: AudioLines },
-  { id: 'interview', label: 'Interview', icon: BrainCircuit },
-  { id: 'mining', label: 'Mine', icon: Sparkles },
-  { id: 'review', label: 'Review', icon: ListChecks },
-  { id: 'recap', label: 'Confirm', icon: Check },
+const STAGE_RAIL: Array<{ id: Stage; labelKey: string; icon: typeof UploadCloud }> = [
+  { id: 'upload', labelKey: 'journey.stage.upload', icon: UploadCloud },
+  { id: 'describe', labelKey: 'journey.stage.describe', icon: AudioLines },
+  { id: 'interview', labelKey: 'journey.stage.interview', icon: BrainCircuit },
+  { id: 'mining', labelKey: 'journey.stage.mining', icon: Sparkles },
+  { id: 'review', labelKey: 'journey.stage.review', icon: ListChecks },
+  { id: 'recap', labelKey: 'journey.stage.recap', icon: Check },
 ];
 
 const DRAFT_KEY = 'bp_journey_draft_v2';
 
-const MINING_MESSAGES = [
-  'Reading your description…',
-  'Separating the distinct processes…',
-  'Counting the steps in each one…',
-  'Expanding triggers, actions and results…',
-  'Detecting the systems you touch…',
-  'Classifying each step for the AI transformation…',
+const MINING_MESSAGE_KEYS = [
+  'journey.mine1',
+  'journey.mine2',
+  'journey.mine3',
+  'journey.mine4',
+  'journey.mine5',
+  'journey.mine6',
 ];
 
 interface DraftShape {
@@ -67,6 +68,7 @@ export default function CaptureJourney({
   onFinish: (destinationTab: string, processId?: string) => void;
   onSkipToWorkspace: () => void;
 }) {
+  const t = useT();
   const draft = useRef<DraftShape | null>(
     (() => {
       try {
@@ -99,7 +101,7 @@ export default function CaptureJourney({
     if (stage !== 'mining') return;
     setMiningMessage(0);
     const interval = setInterval(() => {
-      setMiningMessage((m) => Math.min(m + 1, MINING_MESSAGES.length - 1));
+      setMiningMessage((m) => Math.min(m + 1, MINING_MESSAGE_KEYS.length - 1));
     }, 900);
     return () => clearInterval(interval);
   }, [stage]);
@@ -179,7 +181,7 @@ export default function CaptureJourney({
       setTimeout(() => setStage('review'), Math.max(0, minimumWait));
     } catch (err: any) {
       console.error(err);
-      setMiningError('The understanding agent could not reach the server. Check that the dev server is running, then try again.');
+      setMiningError(t('journey.miningError'));
     }
   };
 
@@ -246,20 +248,20 @@ export default function CaptureJourney({
                   }`}
                 >
                   {i < currentIndex ? <Check size={11} /> : <s.icon size={11} />}
-                  <span className="hidden sm:inline">{s.label}</span>
+                  <span className="hidden sm:inline">{t(s.labelKey)}</span>
                 </span>
               </div>
             ))}
           </div>
           <button onClick={onSkipToWorkspace} className="text-xs font-medium text-mute hover:text-ink transition-colors cursor-pointer whitespace-nowrap ml-3">
-            Skip for now →
+            {t('journey.skip')}
           </button>
         </div>
 
         {resumedDraft && stage !== 'recap' && (
           <div className="chip bg-citron-soft border-transparent text-citron-deep mb-4 animate-fade-up">
-            <Sparkles size={11} /> Resumed your unfinished draft — nothing was lost.
-            <button className="cursor-pointer underline decoration-dotted" onClick={() => setResumedDraft(false)}>ok</button>
+            <Sparkles size={11} /> {t('journey.resumed')}
+            <button className="cursor-pointer underline decoration-dotted" onClick={() => setResumedDraft(false)}>{t('common.ok')}</button>
           </div>
         )}
 
@@ -300,9 +302,9 @@ export default function CaptureJourney({
                 >
                   <ScanSearch size={36} className="text-ink" />
                 </motion.div>
-                <h2 className="font-display text-2xl font-semibold tracking-tight mt-8">Understanding agent at work</h2>
+                <h2 className="font-display text-2xl font-semibold tracking-tight mt-8">{t('journey.miningTitle')}</h2>
                 <motion.p key={miningMessage} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="text-sm text-mute mt-2">
-                  {MINING_MESSAGES[miningMessage]}
+                  {t(MINING_MESSAGE_KEYS[miningMessage])}
                 </motion.p>
                 <div className="mt-8 w-56">
                   <div className="h-1.5 rounded-full bg-line overflow-hidden">
@@ -320,11 +322,11 @@ export default function CaptureJourney({
                 <div className="w-16 h-16 rounded-full bg-blush grid place-items-center text-warn">
                   <ScanSearch size={26} />
                 </div>
-                <h2 className="font-display text-xl font-semibold tracking-tight mt-6">That didn&rsquo;t go through</h2>
+                <h2 className="font-display text-xl font-semibold tracking-tight mt-6">{t('journey.miningFailTitle')}</h2>
                 <p className="text-sm text-mute mt-2 max-w-sm">{miningError}</p>
                 <div className="flex gap-2 mt-6">
-                  <button className="btn-ghost !py-2 !px-4 text-xs" onClick={() => setStage('describe')}>Back</button>
-                  <button className="btn-dark !py-2 !px-4 text-xs" onClick={() => runMining()}>Try again</button>
+                  <button className="btn-ghost !py-2 !px-4 text-xs" onClick={() => setStage('describe')}>{t('common.back')}</button>
+                  <button className="btn-dark !py-2 !px-4 text-xs" onClick={() => runMining()}>{t('common.tryAgain')}</button>
                 </div>
               </>
             )}

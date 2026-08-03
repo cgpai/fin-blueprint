@@ -2,6 +2,7 @@ import { ArrowLeft, Loader2, Mic, MicOff, Sparkles } from 'lucide-react';
 import { SubFunction } from '../../types';
 import { useSpeech } from '../../lib/useSpeech';
 import { SUBFUNCTIONS_LIST } from '../../data/mockData';
+import { useLocale, useT } from '../../lib/i18n';
 import { AutoTextarea } from '../ui';
 
 export default function DescribeProcess({
@@ -25,37 +26,43 @@ export default function DescribeProcess({
   onBack: () => void;
   onMine: () => void;
 }) {
-  const speech = useSpeech((chunk) => setNarrative(narrative ? `${narrative.trimEnd()} ${chunk}` : chunk));
+  const t = useT();
+  const { locale } = useLocale();
+  const speech = useSpeech(
+    (chunk) => setNarrative(narrative ? `${narrative.trimEnd()} ${chunk}` : chunk),
+    locale === 'id' ? 'id-ID' : 'en-US',
+  );
   const canMine = narrative.trim().length >= 30 || hasOutputs;
 
   return (
     <div className="animate-fade-up">
-      <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">Describe how you work</h2>
-      <p className="text-sm text-mute mt-1.5 max-w-lg">
-        In your own words — type it or just talk. Don&rsquo;t worry about structure; counting, classifying and
-        expanding the steps is the agent&rsquo;s job.
-      </p>
+      <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{t('describe.title')}</h2>
+      <p className="text-sm text-mute mt-1.5 max-w-lg">{t('describe.sub')}</p>
 
       <div className="mt-7 grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="label" htmlFor="j-title">Give it a working title <span className="text-faint font-normal">(optional)</span></label>
+          <label className="label" htmlFor="j-title">
+            {t('describe.workingTitle')} <span className="text-faint font-normal">{t('common.optional')}</span>
+          </label>
           <input
             id="j-title"
             className="field"
-            placeholder="e.g. Monthly VAT filing"
+            placeholder={t('describe.titlePh')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
         <div>
-          <label className="label" htmlFor="j-sf">Line of work <span className="text-faint font-normal">(optional — AI can suggest)</span></label>
+          <label className="label" htmlFor="j-sf">
+            {t('describe.lineOfWork')} <span className="text-faint font-normal">{t('describe.lineHint')}</span>
+          </label>
           <select
             id="j-sf"
             className="field cursor-pointer"
             value={subFunction}
             onChange={(e) => setSubFunction(e.target.value as SubFunction | '')}
           >
-            <option value="">Let the agent suggest…</option>
+            <option value="">{t('describe.suggest')}</option>
             {SUBFUNCTIONS_LIST.map((sf) => (
               <option key={sf} value={sf}>{sf}</option>
             ))}
@@ -64,11 +71,11 @@ export default function DescribeProcess({
       </div>
 
       <div className="mt-4 relative">
-        <label className="label" htmlFor="j-narrative">Your process, in your own words</label>
+        <label className="label" htmlFor="j-narrative">{t('describe.narrative')}</label>
         <AutoTextarea
           id="j-narrative"
           className="field min-h-52 resize-y !pr-16 leading-relaxed"
-          placeholder={'e.g. "Every morning I download the discharged patient billings from KAIROS, check the tariff codes against the BPJS rules, then upload the verified claims to the BPJS e-Claim portal. When payments arrive I reconcile them in Dynamics 365…"'}
+          placeholder={t('describe.narrativePh')}
           value={narrative}
           onChange={(e) => setNarrative(e.target.value)}
         />
@@ -84,8 +91,8 @@ export default function DescribeProcess({
                   ? 'bg-bad text-white animate-pulse-ring'
                   : 'bg-ink text-white hover:scale-105'
             }`}
-            aria-label={speech.loading ? 'Requesting microphone...' : speech.listening ? 'Stop dictating' : 'Dictate with your voice'}
-            title={speech.loading ? 'Requesting microphone...' : speech.listening ? 'Stop dictating' : 'Dictate with your voice'}
+            aria-label={speech.loading ? t('describe.micLoading') : speech.listening ? t('describe.stopDictate') : t('describe.dictate')}
+            title={speech.loading ? t('describe.micLoading') : speech.listening ? t('describe.stopDictate') : t('describe.dictate')}
           >
             {speech.loading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -103,22 +110,22 @@ export default function DescribeProcess({
           {speech.error
             ? speech.error
             : speech.loading
-              ? 'Requesting microphone permission...'
+              ? t('describe.micPerm')
               : speech.listening
-                ? 'Listening… speak naturally, pause anytime.'
+                ? t('describe.listening')
                 : speech.supported
-                  ? 'Tip: tap the mic and narrate your day — the transcript lands here.'
-                  : 'Voice input isn’t supported in this browser — typing works just as well.'}
+                  ? t('describe.micTip')
+                  : t('describe.noMic')}
         </span>
-        <span className="text-faint">{narrative.trim().length} chars</span>
+        <span className="text-faint">{t('describe.chars', { n: narrative.trim().length })}</span>
       </div>
 
       <div className="mt-8 flex items-center justify-between">
         <button className="btn-ghost !py-2 !px-4 text-xs" onClick={onBack}>
-          <ArrowLeft size={14} /> Back
+          <ArrowLeft size={14} /> {t('common.back')}
         </button>
-        <button className="btn-dark" onClick={onMine} disabled={!canMine} title={canMine ? undefined : 'Describe your process (or upload outputs) first'}>
-          <Sparkles size={15} /> Let the agent do its work
+        <button className="btn-dark" onClick={onMine} disabled={!canMine} title={canMine ? undefined : t('describe.needMore')}>
+          <Sparkles size={15} /> {t('describe.mine')}
         </button>
       </div>
     </div>

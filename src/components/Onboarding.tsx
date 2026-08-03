@@ -3,15 +3,18 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Check, Crown, Landmark, ShieldCheck, UserRound, Users, Wrench } from 'lucide-react';
 import { Persona, UserProfile } from '../types';
 import { hashPassword } from '../lib/utils';
+import { LanguageToggle, useT } from '../lib/i18n';
 import { ProgressDots } from './ui';
 
-const ROLE_OPTIONS: Array<{ role: Persona; title: string; sub: string; body: string; icon: typeof Crown }> = [
-  { role: 'L1', title: 'CFO', sub: 'L1 · Directorate leader', body: 'Full-directorate visibility, strategy and native-AI adoption.', icon: Crown },
-  { role: 'L2', title: 'GM / Head / Advisor', sub: 'L2 · Subfunction leader', body: 'Plans the transformation for one subfunction.', icon: Landmark },
-  { role: 'L3', title: 'Controller / Dept. head', sub: 'L3 · Unit manager', body: 'Manages people and tracks documentation completion.', icon: Users },
-  { role: 'L4', title: 'Executive / Coordinator', sub: 'L4 · Process executor', body: 'Documents day-to-day working processes in detail.', icon: Wrench },
-  { role: 'Admin', title: 'Programme admin', sub: 'Project Vanguard lead', body: 'Runs the programme: data quality, hackathon list, next stage.', icon: ShieldCheck },
-];
+const ROLE_ICONS: Record<Persona, typeof Crown> = {
+  L1: Crown,
+  L2: Landmark,
+  L3: Users,
+  L4: Wrench,
+  Admin: ShieldCheck,
+};
+
+const ROLE_KEYS: Persona[] = ['L1', 'L2', 'L3', 'L4', 'Admin'];
 
 const slide = {
   initial: { opacity: 0, x: 32 },
@@ -29,6 +32,7 @@ export default function Onboarding({
   onBack: () => void;
   registeredProfiles?: UserProfile[];
 }) {
+  const t = useT();
   const [step, setStep] = useState(0); // 0 role · 1 name · 2 password · 3 done
   const [role, setRole] = useState<Persona | null>(null);
   const [name, setName] = useState('');
@@ -44,9 +48,9 @@ export default function Onboarding({
   const identityValid = name.trim().length >= 2 && emailValid && !emailTaken;
 
   const passwordChecks = [
-    { ok: password.length >= 8, text: 'At least 8 characters' },
-    { ok: /[a-zA-Z]/.test(password) && /\d/.test(password), text: 'Mixes letters and numbers' },
-    { ok: password.length > 0 && password === confirm, text: 'Both entries match' },
+    { ok: password.length >= 8, text: t('onboard.checkLen') },
+    { ok: /[a-zA-Z]/.test(password) && /\d/.test(password), text: t('onboard.checkMix') },
+    { ok: password.length > 0 && password === confirm, text: t('onboard.checkMatch') },
   ];
   const passwordValid = passwordChecks.every((c) => c.ok);
 
@@ -71,13 +75,16 @@ export default function Onboarding({
     <div className="min-h-full sky-wash flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-xl">
         <div className="flex items-center justify-between mb-6 px-1">
-          <button
-            onClick={() => (step === 0 ? onBack() : setStep(step - 1))}
-            className="btn-ghost !py-2 !px-3.5 text-xs"
-            disabled={step === 3}
-          >
-            <ArrowLeft size={14} /> Back
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => (step === 0 ? onBack() : setStep(step - 1))}
+              className="btn-ghost !py-2 !px-3.5 text-xs"
+              disabled={step === 3}
+            >
+              <ArrowLeft size={14} /> {t('onboard.back')}
+            </button>
+            <LanguageToggle />
+          </div>
           <ProgressDots total={3} current={Math.min(step, 2)} />
         </div>
 
@@ -85,65 +92,68 @@ export default function Onboarding({
           <AnimatePresence mode="wait">
             {step === 0 && (
               <motion.div key="role" {...slide} className="flex-1 flex flex-col">
-                <div className="text-xs font-semibold text-mute">Understanding you · 1 of 3</div>
+                <div className="text-xs font-semibold text-mute">{t('onboard.progress', { n: 1 })}</div>
                 <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-2">
-                  What&rsquo;s your role?
+                  {t('onboard.roleTitle')}
                 </h1>
-                <p className="text-sm text-mute mt-1.5">This decides which views and dashboards you&rsquo;ll get.</p>
+                <p className="text-sm text-mute mt-1.5">{t('onboard.roleSub')}</p>
                 <div className="mt-6 grid gap-2.5">
-                  {ROLE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.role}
-                      onClick={() => {
-                        setRole(opt.role);
-                        setTimeout(() => setStep(1), 220);
-                      }}
-                      className={`text-left rounded-2xl border px-4 py-3.5 flex items-center gap-4 transition-all cursor-pointer bg-card ${
-                        role === opt.role ? 'border-ink shadow-lift' : 'border-line hover:border-faint'
-                      }`}
-                    >
-                      <span
-                        className={`w-10 h-10 rounded-full grid place-items-center shrink-0 transition-colors ${
-                          role === opt.role ? 'bg-citron text-ink' : 'bg-canvas text-mute'
+                  {ROLE_KEYS.map((roleKey) => {
+                    const Icon = ROLE_ICONS[roleKey];
+                    return (
+                      <button
+                        key={roleKey}
+                        onClick={() => {
+                          setRole(roleKey);
+                          setTimeout(() => setStep(1), 220);
+                        }}
+                        className={`text-left rounded-2xl border px-4 py-3.5 flex items-center gap-4 transition-all cursor-pointer bg-card ${
+                          role === roleKey ? 'border-ink shadow-lift' : 'border-line hover:border-faint'
                         }`}
                       >
-                        <opt.icon size={17} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="flex items-baseline gap-2">
-                          <span className="font-semibold text-sm">{opt.title}</span>
-                          <span className="text-[11px] font-medium text-faint">{opt.sub}</span>
+                        <span
+                          className={`w-10 h-10 rounded-full grid place-items-center shrink-0 transition-colors ${
+                            role === roleKey ? 'bg-citron text-ink' : 'bg-canvas text-mute'
+                          }`}
+                        >
+                          <Icon size={17} />
                         </span>
-                        <span className="block text-xs text-mute mt-0.5">{opt.body}</span>
-                      </span>
-                    </button>
-                  ))}
+                        <span className="min-w-0">
+                          <span className="flex items-baseline gap-2">
+                            <span className="font-semibold text-sm">{t(`onboard.role.${roleKey}.title`)}</span>
+                            <span className="text-[11px] font-medium text-faint">{t(`onboard.role.${roleKey}.sub`)}</span>
+                          </span>
+                          <span className="block text-xs text-mute mt-0.5">{t(`onboard.role.${roleKey}.body`)}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
 
             {step === 1 && (
               <motion.div key="name" {...slide} className="flex-1 flex flex-col">
-                <div className="text-xs font-semibold text-mute">Understanding you · 2 of 3</div>
+                <div className="text-xs font-semibold text-mute">{t('onboard.progress', { n: 2 })}</div>
                 <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-2">
-                  What&rsquo;s your name?
+                  {t('onboard.nameTitle')}
                 </h1>
-                <p className="text-sm text-mute mt-1.5">So we can greet you properly and attribute your catalogue.</p>
+                <p className="text-sm text-mute mt-1.5">{t('onboard.nameSub')}</p>
                 <div className="mt-8 space-y-4 flex-1">
                   <div>
-                    <label className="label" htmlFor="ob-name">Full name</label>
+                    <label className="label" htmlFor="ob-name">{t('common.fullName')}</label>
                     <input
                       id="ob-name"
                       autoFocus
                       className="field !text-lg !py-4"
-                      placeholder="e.g. Budi Santoso"
+                      placeholder={t('onboard.namePlaceholder')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && name.trim() && setStep(2)}
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor="ob-email">Work email</label>
+                    <label className="label" htmlFor="ob-email">{t('common.workEmail')}</label>
                     <input
                       id="ob-email"
                       type="email"
@@ -153,21 +163,21 @@ export default function Onboarding({
                       onChange={(e) => setEmail(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
                     />
-                    {email.trim() && !emailValid && <div className="text-xs text-bad mt-2">Enter a valid work email.</div>}
+                    {email.trim() && !emailValid && <div className="text-xs text-bad mt-2">{t('onboard.emailInvalid')}</div>}
                     {emailTaken && (
                       <div className="text-xs text-bad mt-2">
-                        Email already registered. Please sign in instead.
+                        {t('onboard.emailTaken')}
                       </div>
                     )}
                   </div>
                   <div>
                     <label className="label" htmlFor="ob-role-override">
-                      Manual Role Override <span className="text-faint font-normal">(optional — completely bypasses system-assigned role)</span>
+                      {t('onboard.roleOverride')} <span className="text-faint font-normal">{t('onboard.roleOverrideHint')}</span>
                     </label>
                     <input
                       id="ob-role-override"
                       className="field"
-                      placeholder="e.g. Senior Finance Manager, CFO Consultant"
+                      placeholder={t('onboard.roleOverridePh')}
                       value={manualRoleOverride}
                       onChange={(e) => setManualRoleOverride(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}
@@ -175,23 +185,21 @@ export default function Onboarding({
                   </div>
                 </div>
                 <button className="btn-dark w-full mt-6" disabled={!identityValid} onClick={() => setStep(2)}>
-                  Continue <ArrowRight size={15} />
+                  {t('common.continue')} <ArrowRight size={15} />
                 </button>
               </motion.div>
             )}
 
             {step === 2 && (
               <motion.div key="password" {...slide} className="flex-1 flex flex-col">
-                <div className="text-xs font-semibold text-mute">Understanding you · 3 of 3</div>
+                <div className="text-xs font-semibold text-mute">{t('onboard.progress', { n: 3 })}</div>
                 <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight mt-2">
-                  Set a password
+                  {t('onboard.passTitle')}
                 </h1>
-                <p className="text-sm text-mute mt-1.5">
-                  Your catalogue stays on this device — the password makes sure only you can re-open it later.
-                </p>
+                <p className="text-sm text-mute mt-1.5">{t('onboard.passSub')}</p>
                 <div className="mt-8 space-y-4 flex-1">
                   <div>
-                    <label className="label" htmlFor="ob-pass">Password</label>
+                    <label className="label" htmlFor="ob-pass">{t('common.password')}</label>
                     <input
                       id="ob-pass"
                       autoFocus
@@ -203,7 +211,7 @@ export default function Onboarding({
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor="ob-confirm">Confirm password</label>
+                    <label className="label" htmlFor="ob-confirm">{t('onboard.confirmPass')}</label>
                     <input
                       id="ob-confirm"
                       type="password"
@@ -226,7 +234,7 @@ export default function Onboarding({
                   </ul>
                 </div>
                 <button className="btn-dark w-full mt-6" disabled={!passwordValid || saving} onClick={finish}>
-                  Create my space <ArrowRight size={15} />
+                  {t('onboard.create')} <ArrowRight size={15} />
                 </button>
               </motion.div>
             )}
@@ -247,13 +255,11 @@ export default function Onboarding({
                   <Check size={34} className="text-ink" />
                 </motion.div>
                 <h1 className="font-display text-3xl font-semibold tracking-tight mt-6">
-                  You&rsquo;re set, {name.trim().split(' ')[0]}!
+                  {t('onboard.doneTitle', { name: name.trim().split(' ')[0] })}
                 </h1>
-                <p className="text-sm text-mute mt-2 max-w-xs">
-                  Let&rsquo;s capture your first working process — the understanding agent is ready.
-                </p>
+                <p className="text-sm text-mute mt-2 max-w-xs">{t('onboard.doneSub')}</p>
                 <div className="mt-6 flex items-center gap-2 text-xs text-faint">
-                  <UserRound size={13} /> Starting your journey…
+                  <UserRound size={13} /> {t('onboard.starting')}
                 </div>
               </motion.div>
             )}

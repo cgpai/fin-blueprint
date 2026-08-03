@@ -15,7 +15,7 @@ interface SpeechRecognitionLike {
  * Thin wrapper over the Web Speech API. Streams final transcript chunks to
  * `onChunk`; exposes `supported` so the UI can hide the mic gracefully.
  */
-export function useSpeech(onChunk: (text: string) => void) {
+export function useSpeech(onChunk: (text: string) => void, lang = 'en-US') {
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export function useSpeech(onChunk: (text: string) => void) {
 
     try {
       const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
-      recognition.lang = 'en-US';
+      recognition.lang = lang;
       recognition.continuous = true;
       recognition.interimResults = false;
       

@@ -14,6 +14,7 @@ import { ArrowRight, ArrowUpRight, Award, Route, TrendingUp } from 'lucide-react
 import { ImprovementItem, ManagedProject, Persona, Process, ProjectStage } from '../types';
 import { SUBFUNCTIONS_LIST } from '../data/mockData';
 import { CHART_COLORS, classificationCounts, CLASSIFICATION_META, timeAgo } from '../lib/utils';
+import { classLabel, useLocale, useT } from '../lib/i18n';
 import { Avatar, Meter, Stat, StatusChip } from './ui';
 
 const TOOLTIP_STYLE = {
@@ -43,6 +44,8 @@ export default function DashboardCFO({
   onUpdateProject?: (proj: ManagedProject) => void;
   onNavigateToProject?: () => void;
 }) {
+  const t = useT();
+  const { locale } = useLocale();
   const coverageData = useMemo(
     () =>
       SUBFUNCTIONS_LIST.map((sf) => ({
@@ -60,7 +63,7 @@ export default function DashboardCFO({
 
   const counts = classificationCounts(processes);
   const classData = (['automation', 'agentic-ai', 'human-in-the-loop'] as const)
-    .map((cls) => ({ id: cls, name: CLASSIFICATION_META[cls].label, value: counts[cls] }))
+    .map((cls) => ({ id: cls, name: classLabel(locale, cls), value: counts[cls] }))
     .filter((d) => d.value > 0);
   const totalClassified = classData.reduce((s, d) => s + d.value, 0);
 
@@ -92,24 +95,26 @@ export default function DashboardCFO({
     <div className="animate-fade-up space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <h2 className="font-display text-xl font-semibold tracking-tight">
-          {currentPersona === 'L1' ? 'Directorate overview' : 'Subfunction overview'}
+          {currentPersona === 'L1' ? t('dash.cfo.L1') : t('dash.cfo.L2')}
         </h2>
-        <span className="text-xs text-faint">Last refreshed {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="text-xs text-faint">
+          {t('dash.cfo.refreshed', { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}
+        </span>
       </div>
 
       {/* Stat tiles */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 print:break-inside-avoid">
-        <Stat label="Processes documented" value={processes.length} hint="across 7 functions" accent="citron" />
-        <Stat label="Avg. completeness" value={`${avgCompleteness}%`} hint="of required detail captured" />
-        <Stat label="Automation candidates" value={automationCandidates} hint="suitability ≥ 70" accent="veil" />
-        <Stat label="Improvements resolved" value={`${resolvedImprovements}/${improvementItems.length}`} hint="tracked initiatives" />
+        <Stat label={t('dash.cfo.statProcesses')} value={processes.length} hint={t('dash.cfo.statProcessesHint')} accent="citron" />
+        <Stat label={t('dash.cfo.statComplete')} value={`${avgCompleteness}%`} hint={t('dash.cfo.statCompleteHint')} />
+        <Stat label={t('dash.cfo.statAuto')} value={automationCandidates} hint={t('dash.cfo.statAutoHint')} accent="veil" />
+        <Stat label={t('dash.cfo.statImp')} value={`${resolvedImprovements}/${improvementItems.length}`} hint={t('dash.cfo.statImpHint')} />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* Coverage by subfunction */}
         <div className="card p-6 lg:col-span-3 print:break-inside-avoid">
-          <h3 className="font-display font-semibold text-sm">Documentation coverage by line of work</h3>
-          <p className="text-xs text-mute mt-0.5 mb-4">Documented processes per subfunction</p>
+          <h3 className="font-display font-semibold text-sm">{t('dash.cfo.coverage')}</h3>
+          <p className="text-xs text-mute mt-0.5 mb-4">{t('dash.cfo.coverageSub')}</p>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={coverageData} margin={{ top: 4, right: 4, bottom: 45, left: -28 }}>
               <XAxis
@@ -136,8 +141,8 @@ export default function DashboardCFO({
 
         {/* Classification mix */}
         <div className="card p-6 lg:col-span-2 print:break-inside-avoid">
-          <h3 className="font-display font-semibold text-sm">How the work splits</h3>
-          <p className="text-xs text-mute mt-0.5 mb-1">{totalClassified} classified steps</p>
+          <h3 className="font-display font-semibold text-sm">{t('dash.cfo.mix')}</h3>
+          <p className="text-xs text-mute mt-0.5 mb-1">{t('dash.cfo.mixSub')}</p>
           {totalClassified === 0 ? (
             <div className="h-52 grid place-items-center text-sm text-faint text-center px-6">
               Run AI refinement on a process to see the agentic / automation / human split.
@@ -158,7 +163,7 @@ export default function DashboardCFO({
                 {classData.map((d) => (
                   <li key={d.id} className="flex items-center gap-2 text-xs">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHART_COLORS[d.id] }} />
-                    <span className="text-inksoft font-medium flex-1">{CLASSIFICATION_META[d.id].short}</span>
+                    <span className="text-inksoft font-medium flex-1">{classLabel(locale, d.id, true)}</span>
                     <span className="font-bold">{Math.round((d.value / totalClassified) * 100)}%</span>
                   </li>
                 ))}
@@ -172,7 +177,7 @@ export default function DashboardCFO({
         {/* Recent processes */}
         <div className="card p-6 lg:col-span-3 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <TrendingUp size={15} className="text-veil-deep" /> Latest documentation activity
+            <TrendingUp size={15} className="text-veil-deep" /> {t('dash.cfo.recent')}
           </h3>
           <ul className="mt-4 divide-y divide-line">
             {recent.map((proc) => (
@@ -198,7 +203,7 @@ export default function DashboardCFO({
         <div className="space-y-4 lg:col-span-2">
           <div className="card p-6 print:break-inside-avoid">
             <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <Award size={15} className="text-citron-deep" /> Directorate champions
+              <Award size={15} className="text-citron-deep" /> {t('dash.cfo.champions')}
             </h3>
             <ul className="mt-3.5 space-y-3">
               {champions.map((champ, i) => (
@@ -217,7 +222,7 @@ export default function DashboardCFO({
           <div className="card bg-ink border-transparent p-6 text-white print:break-inside-avoid space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-                <Route size={15} className="text-citron" /> Native-AI transformation
+                <Route size={15} className="text-citron" /> {t('dash.cfo.plan')}
               </h3>
               {onNavigateToProject && (
                 <button
