@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Check, ChevronRight, MessageSquareCode } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Check, MessageSquareCode } from 'lucide-react';
+import { useT } from '../../lib/i18n';
 
 interface ChatMessage {
   id: string;
@@ -70,6 +71,7 @@ export default function PRDInterviewChatbot({
   onConfirmPRD: (summaryText: string) => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const [currentStep, setCurrentStep] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -175,16 +177,18 @@ Pertama-tama, **siapakah Target User utama** (peran/jabatan staf) yang menjalank
                 <MessageSquareCode size={16} />
               </div>
               <div>
-                <h3 className="text-xs font-semibold">AI Architect: PRD Interview</h3>
-                <p className="text-[10px] text-mute">Pertanyaan {currentStep + 1} dari {QUESTIONS.length} (Max 10 Turns)</p>
+                <h3 className="text-xs font-semibold">{t('interview.headerTitle')}</h3>
+                <p className="text-[10px] text-mute">
+                  {t('interview.progress', { current: currentStep + 1, total: QUESTIONS.length })}
+                </p>
               </div>
             </div>
             <button
               onClick={handleSkipAll}
               className="text-[10px] bg-white/10 hover:bg-white/20 text-white font-medium py-1 px-2.5 rounded-full transition-all cursor-pointer"
-              title="Skip remaining questions and generate the blueprint directly"
+              title={t('interview.skipTitle')}
             >
-              Skip &amp; Confirm PRD
+              {t('interview.skipConfirm')}
             </button>
           </div>
 
@@ -221,7 +225,7 @@ Pertama-tama, **siapakah Target User utama** (peran/jabatan staf) yang menjalank
             <input
               type="text"
               className="field flex-1 !py-2.5 !px-4 text-xs !h-auto rounded-full"
-              placeholder={QUESTIONS[currentStep]?.placeholder || 'Ketik jawaban Anda di sini...'}
+              placeholder={QUESTIONS[currentStep]?.placeholder || t('interview.inputFallback')}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
@@ -244,43 +248,43 @@ Pertama-tama, **siapakah Target User utama** (peran/jabatan staf) yang menjalank
               <Sparkles size={16} />
             </div>
             <div>
-              <h3 className="font-display text-xl font-semibold tracking-tight">Review &amp; Confirm PRD Requirements</h3>
-              <p className="text-xs text-mute mt-0.5">Konfirmasi ringkasan data di bawah ini sebelum Agent memproses cetak biru Anda.</p>
+              <h3 className="font-display text-xl font-semibold tracking-tight">{t('interview.summaryTitle')}</h3>
+              <p className="text-xs text-mute mt-0.5">{t('interview.summarySub')}</p>
             </div>
           </div>
 
           <div className="border border-line/60 rounded-2xl overflow-hidden bg-canvas-soft divide-y divide-line/40 text-xs">
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Target User Persona</span>
-              <span className="sm:col-span-2 text-ink">{prdData.targetUser || <em className="text-faint">Default: Finance Operations Staff</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.targetUser')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.targetUser || <em className="text-faint">{t('interview.default.targetUser')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Aplikasi Existing</span>
-              <span className="sm:col-span-2 text-ink">{prdData.ecosystemApps || <em className="text-faint">Default: Excel, ERP, local portals</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.ecosystem')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.ecosystemApps || <em className="text-faint">{t('interview.default.ecosystem')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1 text-ink">
-              <span className="font-semibold text-mute">Estimasi Volume</span>
-              <span className="sm:col-span-2">{prdData.monthlyVolume || <em className="text-faint">Default: 500-2,500 transactions/month</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.volume')}</span>
+              <span className="sm:col-span-2">{prdData.monthlyVolume || <em className="text-faint">{t('interview.default.volume')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Beban Kerja Saat Ini</span>
-              <span className="sm:col-span-2 text-ink">{prdData.staffHours || <em className="text-faint">Default: ~80 hours manual effort/month</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.workload')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.staffHours || <em className="text-faint">{t('interview.default.workload')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Risiko Kesalahan Manual</span>
-              <span className="sm:col-span-2 text-ink">{prdData.errorRisk || <em className="text-faint">Default: Claim denials, delays, accounting audit risks</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.errorRisk')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.errorRisk || <em className="text-faint">{t('interview.default.errorRisk')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Validation Gates</span>
-              <span className="sm:col-span-2 text-ink">{prdData.verificationRequired || <em className="text-faint">Default: Supervisor confirmation required</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.validation')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.verificationRequired || <em className="text-faint">{t('interview.default.validation')}</em>}</span>
             </div>
             <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-              <span className="font-semibold text-mute">Kemitraan Departemen</span>
-              <span className="sm:col-span-2 text-ink">{prdData.partnerships || <em className="text-faint">Default: IT Security & Vendor Gateway Teams</em>}</span>
+              <span className="font-semibold text-mute">{t('interview.label.partnerships')}</span>
+              <span className="sm:col-span-2 text-ink">{prdData.partnerships || <em className="text-faint">{t('interview.default.partnerships')}</em>}</span>
             </div>
             {prdData.customNotes && (
               <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-1">
-                <span className="font-semibold text-mute">Catatan Khusus</span>
+                <span className="font-semibold text-mute">{t('interview.label.customNotes')}</span>
                 <span className="sm:col-span-2 text-ink">{prdData.customNotes}</span>
               </div>
             )}
@@ -301,13 +305,13 @@ Pertama-tama, **siapakah Target User utama** (peran/jabatan staf) yang menjalank
               }}
               className="btn-ghost !py-2 !px-4 text-xs cursor-pointer"
             >
-              Restart Chat
+              {t('interview.restart')}
             </button>
             <button
               onClick={handleConfirm}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5 !py-2 !px-5 text-xs rounded-full cursor-pointer transition-all shadow-md"
             >
-              <Check size={13} /> Confirm &amp; Auto-Mine Process
+              <Check size={13} /> {t('interview.confirmMine')}
             </button>
           </div>
         </div>

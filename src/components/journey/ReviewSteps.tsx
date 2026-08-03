@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { DraftProcess, ProcessStep, SubFunction, SystemItem } from '../../types';
 import { computeCompleteness, stepGaps, uid } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 import { ClassChip, Meter, TagList, AutoTextarea } from '../ui';
 import { SUBFUNCTIONS_LIST } from '../../data/mockData';
 
@@ -22,12 +23,14 @@ function AttributeEditor({
   placeholder,
   onChange,
   suggestions,
+  addLabel,
 }: {
   label: string;
   values: string[];
   placeholder: string;
   onChange: (values: string[]) => void;
   suggestions?: string[];
+  addLabel: string;
 }) {
   const [draft, setDraft] = useState('');
   const listId = suggestions ? `sugg-${label.replace(/\s+/g, '-').toLowerCase()}-${uid('l')}` : undefined;
@@ -67,7 +70,7 @@ function AttributeEditor({
             ))}
           </datalist>
         )}
-        <button type="button" onClick={add} className="btn-ghost !p-1.5 !rounded-full shrink-0" aria-label={`Add ${label}`}>
+        <button type="button" onClick={add} className="btn-ghost !p-1.5 !rounded-full shrink-0" aria-label={addLabel}>
           <Plus size={13} />
         </button>
       </div>
@@ -93,12 +96,15 @@ function ProcessEditor({
   systemNames: string[];
   onAddSystem: (name: string) => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState<string | null>(process.steps[0]?.id ?? null);
   const completeness = computeCompleteness({
     title: process.title,
     description: process.summary || process.title,
     steps: process.steps,
   });
+
+  const gapLabel = (gap: string) => t(`review.gap.${gap}`);
 
   const setSteps = (steps: ProcessStep[]) => onChange({ ...process, steps: steps.map((s, i) => ({ ...s, order: i + 1 })) });
   const updateStep = (id: string, patch: Partial<ProcessStep>) =>
@@ -113,7 +119,7 @@ function ProcessEditor({
   };
 
   const duplicateStep = (step: ProcessStep, i: number) => {
-    const copy: ProcessStep = { ...step, id: uid('step'), name: `${step.name} (copy)` };
+    const copy: ProcessStep = { ...step, id: uid('step'), name: `${step.name}${t('review.stepCopySuffix')}` };
     setSteps([...process.steps.slice(0, i + 1), copy, ...process.steps.slice(i + 1)]);
   };
 
@@ -143,38 +149,38 @@ function ProcessEditor({
           <span className="w-6 h-6 rounded-full bg-veil-soft grid place-items-center">
             <Layers size={13} />
           </span>
-          Process {index + 1} of {total}
+          {t('review.processOf', { current: index + 1, total })}
         </div>
         {total > 1 && (
           <button
             onClick={onDelete}
             className="text-xs text-faint hover:text-bad flex items-center gap-1 cursor-pointer"
-            title="Remove this process"
+            title={t('review.removeProcessTitle')}
           >
-            <Trash2 size={13} /> Remove
+            <Trash2 size={13} /> {t('review.remove')}
           </button>
         )}
       </div>
 
       <div className="mt-4 grid sm:grid-cols-3 gap-4">
         <div>
-          <label className="label">Process title</label>
+          <label className="label">{t('review.processTitle')}</label>
           <input
             className="field"
             value={process.title}
             onChange={(e) => onChange({ ...process, title: e.target.value })}
-            placeholder="Name this process"
+            placeholder={t('review.processTitlePlaceholder')}
           />
         </div>
         <div>
-          <label className="label">Line of work</label>
+          <label className="label">{t('review.lineOfWork')}</label>
           <select
             className="field cursor-pointer"
             value={process.subFunction}
             onChange={(e) => onChange({ ...process, subFunction: e.target.value as SubFunction })}
           >
             <option value="" disabled>
-              Choose a line of work…
+              {t('review.chooseLineOfWork')}
             </option>
             {SUBFUNCTIONS_LIST.map((sf) => (
               <option key={sf} value={sf}>
@@ -184,13 +190,15 @@ function ProcessEditor({
           </select>
         </div>
         <div>
-          <label className="label">Manual Role Override <span className="text-faint font-normal">(optional)</span></label>
+          <label className="label">
+            {t('review.manualRoleOverride')} <span className="text-faint font-normal">{t('common.optional')}</span>
+          </label>
           <input
             className="field"
             value={process.manualRoleOverride || ''}
             onChange={(e) => onChange({ ...process, manualRoleOverride: e.target.value })}
-            placeholder="e.g. CFO Consultant"
-            title="Dedicated Role override field. Accepts raw manual user input only, completely bypassing AI editing/validation."
+            placeholder={t('review.manualRolePlaceholder')}
+            title={t('review.manualRoleTitle')}
           />
         </div>
       </div>
@@ -199,7 +207,7 @@ function ProcessEditor({
         <div className="flex-1">
           <Meter value={completeness} />
         </div>
-        <span className="text-xs font-semibold text-mute whitespace-nowrap">{completeness}% complete</span>
+        <span className="text-xs font-semibold text-mute whitespace-nowrap">{t('review.percentComplete', { n: completeness })}</span>
       </div>
 
       {/* Step cards */}
@@ -213,16 +221,20 @@ function ProcessEditor({
                 <span className="w-7 h-7 rounded-full bg-ink text-white grid place-items-center text-xs font-bold shrink-0">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">
-                    {step.name || <span className="text-faint font-normal">Untitled step — open to edit</span>}
+                    {step.name || <span className="text-faint font-normal">{t('review.untitledStep')}</span>}
                   </div>
-                  {!isOpen && gaps.length > 0 && <div className="text-[11px] text-warn mt-0.5">Missing: {gaps.join(', ')}</div>}
+                  {!isOpen && gaps.length > 0 && (
+                    <div className="text-[11px] text-warn mt-0.5">
+                      {t('review.missing')} {gaps.map(gapLabel).join(', ')}
+                    </div>
+                  )}
                 </div>
                 {step.aiClassification && <ClassChip classification={step.aiClassification} />}
                 <div className="flex items-center gap-0.5 text-faint" onClick={(e) => e.stopPropagation()}>
-                  <button className="p-1.5 hover:text-ink cursor-pointer disabled:opacity-30" disabled={i === 0} onClick={() => reorder(i, -1)} aria-label="Move up"><ArrowUp size={14} /></button>
-                  <button className="p-1.5 hover:text-ink cursor-pointer disabled:opacity-30" disabled={i === process.steps.length - 1} onClick={() => reorder(i, 1)} aria-label="Move down"><ArrowDown size={14} /></button>
-                  <button className="p-1.5 hover:text-ink cursor-pointer" onClick={() => duplicateStep(step, i)} aria-label="Duplicate step"><Copy size={14} /></button>
-                  <button className="p-1.5 hover:text-bad cursor-pointer" onClick={() => removeStep(step.id)} aria-label="Delete step"><Trash2 size={14} /></button>
+                  <button className="p-1.5 hover:text-ink cursor-pointer disabled:opacity-30" disabled={i === 0} onClick={() => reorder(i, -1)} aria-label={t('review.moveUp')}><ArrowUp size={14} /></button>
+                  <button className="p-1.5 hover:text-ink cursor-pointer disabled:opacity-30" disabled={i === process.steps.length - 1} onClick={() => reorder(i, 1)} aria-label={t('review.moveDown')}><ArrowDown size={14} /></button>
+                  <button className="p-1.5 hover:text-ink cursor-pointer" onClick={() => duplicateStep(step, i)} aria-label={t('review.duplicateStep')}><Copy size={14} /></button>
+                  <button className="p-1.5 hover:text-bad cursor-pointer" onClick={() => removeStep(step.id)} aria-label={t('review.deleteStep')}><Trash2 size={14} /></button>
                 </div>
               </div>
 
@@ -230,25 +242,27 @@ function ProcessEditor({
                 <div className="px-4 pb-5 pt-1 border-t border-line animate-fade-up">
                   <div className="grid sm:grid-cols-[1fr_220px] gap-4 mt-4">
                     <div>
-                      <label className="label">Step name</label>
-                      <input className="field !py-2" value={step.name} onChange={(e) => updateStep(step.id, { name: e.target.value })} placeholder="What happens in this step?" />
+                      <label className="label">{t('review.stepName')}</label>
+                      <input className="field !py-2" value={step.name} onChange={(e) => updateStep(step.id, { name: e.target.value })} placeholder={t('review.stepNamePlaceholder')} />
                     </div>
                     <div>
-                      <label className="label">Best handled by</label>
+                      <label className="label">{t('review.bestHandledBy')}</label>
                       <select
                         className="field !py-2 cursor-pointer"
                         value={step.aiClassification ?? ''}
                         onChange={(e) => updateStep(step.id, { aiClassification: (e.target.value || undefined) as ProcessStep['aiClassification'] })}
                       >
-                        <option value="">Not classified yet</option>
-                        <option value="automation">Automation</option>
-                        <option value="agentic-ai">Agentic AI</option>
-                        <option value="human-in-the-loop">Human-in-the-loop</option>
+                        <option value="">{t('review.notClassified')}</option>
+                        <option value="automation">{t('class.automation')}</option>
+                        <option value="agentic-ai">{t('class.agentic')}</option>
+                        <option value="human-in-the-loop">{t('class.human')}</option>
                       </select>
                     </div>
                   </div>
                   <div className="mt-3">
-                    <label className="label">Description <span className="text-faint font-normal">(trigger → action → result)</span></label>
+                    <label className="label">
+                      {t('review.descriptionLabel')} <span className="text-faint font-normal">{t('review.descriptionHint')}</span>
+                    </label>
                     <AutoTextarea className="field !py-2 min-h-20 resize-y text-sm" value={step.description} onChange={(e) => updateStep(step.id, { description: e.target.value })} />
                   </div>
                   {step.aiRationale && (
@@ -258,16 +272,17 @@ function ProcessEditor({
                     </div>
                   )}
                   <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
-                    <AttributeEditor label="Inputs" values={step.inputs} placeholder="e.g. Vendor invoice PDF" onChange={(v) => updateStep(step.id, { inputs: v })} />
-                    <AttributeEditor label="Outputs" values={step.outputs} placeholder="e.g. Verified claims file" onChange={(v) => updateStep(step.id, { outputs: v })} />
-                    <AttributeEditor label="Decision points" values={step.decisionPoints} placeholder="e.g. Does the tariff match?" onChange={(v) => updateStep(step.id, { decisionPoints: v })} />
-                    <AttributeEditor label="Hand-offs" values={step.handOffs} placeholder="e.g. Escalate to controller" onChange={(v) => updateStep(step.id, { handOffs: v })} />
+                    <AttributeEditor label={t('review.inputs')} values={step.inputs} placeholder={t('review.inputPlaceholder')} onChange={(v) => updateStep(step.id, { inputs: v })} addLabel={t('review.addLabel', { label: t('review.inputs') })} />
+                    <AttributeEditor label={t('review.outputs')} values={step.outputs} placeholder={t('review.outputPlaceholder')} onChange={(v) => updateStep(step.id, { outputs: v })} addLabel={t('review.addLabel', { label: t('review.outputs') })} />
+                    <AttributeEditor label={t('review.decisionPoints')} values={step.decisionPoints} placeholder={t('review.decisionPlaceholder')} onChange={(v) => updateStep(step.id, { decisionPoints: v })} addLabel={t('review.addLabel', { label: t('review.decisionPoints') })} />
+                    <AttributeEditor label={t('review.handOffs')} values={step.handOffs} placeholder={t('review.handOffPlaceholder')} onChange={(v) => updateStep(step.id, { handOffs: v })} addLabel={t('review.addLabel', { label: t('review.handOffs') })} />
                     <div className="sm:col-span-2">
                       <AttributeEditor
-                        label="Systems used"
+                        label={t('review.systemsUsed')}
                         values={step.systems}
-                        placeholder="Start typing — pick from the list or add a new system"
+                        placeholder={t('review.systemPlaceholder')}
                         suggestions={systemNames}
+                        addLabel={t('review.addLabel', { label: t('review.systemsUsed') })}
                         onChange={(v) => {
                           for (const name of v) {
                             if (!systemNames.includes(name)) onAddSystem(name);
@@ -285,7 +300,7 @@ function ProcessEditor({
       </div>
 
       <button onClick={addStep} className="btn-ghost w-full mt-3 border-dashed">
-        <Plus size={15} /> Add a step manually
+        <Plus size={15} /> {t('review.addStepManual')}
       </button>
 
       {/* Collaboration */}
@@ -293,16 +308,17 @@ function ProcessEditor({
         <label className="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" className="accent-[#16233a] w-4 h-4" checked={process.isShared} onChange={(e) => onChange({ ...process, isShared: e.target.checked })} />
           <span className="text-sm font-medium flex items-center gap-2">
-            <UsersRound size={15} className="text-veil-deep" /> Shared process — others work on it too
+            <UsersRound size={15} className="text-veil-deep" /> {t('review.sharedProcess')}
           </span>
         </label>
         {process.isShared && (
           <div className="mt-3 animate-fade-up">
             <AttributeEditor
-              label="Tag collaborators (they'll be linked & notified)"
+              label={t('review.tagCollaborators')}
               values={process.taggedUsers}
-              placeholder="colleague@company.com"
+              placeholder={t('review.collaboratorPlaceholder')}
               suggestions={[]}
+              addLabel={t('review.addLabel', { label: t('review.tagCollaborators') })}
               onChange={(v) => onChange({ ...process, taggedUsers: v })}
             />
           </div>
@@ -329,8 +345,11 @@ export default function ReviewSteps({
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   const systemNames = availableSystems.map((s) => s.name);
   const totalSteps = processes.reduce((n, p) => n + p.steps.length, 0);
+  const processWord = t(processes.length === 1 ? 'review.processWord.one' : 'review.processWord.other');
+  const stepWord = t(totalSteps === 1 ? 'review.stepWord.one' : 'review.stepWord.other');
 
   const updateProcess = (id: string, updated: DraftProcess) => setProcesses(processes.map((p) => (p.id === id ? updated : p)));
   const deleteProcess = (id: string) => setProcesses(processes.filter((p) => p.id !== id));
@@ -368,10 +387,14 @@ export default function ReviewSteps({
 
   return (
     <div className="animate-fade-up">
-      <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">Here&rsquo;s what I understood</h2>
+      <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{t('review.title')}</h2>
       <p className="text-sm text-mute mt-1.5 max-w-lg">
-        I split your description into <strong>{processes.length} distinct process{processes.length === 1 ? '' : 'es'}</strong> ({totalSteps}{' '}
-        step{totalSteps === 1 ? '' : 's'} in total). Rename anything, fix what I misread, or split further — each process saves separately.
+        {t('review.intro', {
+          processCount: processes.length,
+          processWord,
+          stepCount: totalSteps,
+          stepWord,
+        })}
       </p>
 
       {overallSummary && (
@@ -397,20 +420,20 @@ export default function ReviewSteps({
       </div>
 
       <button onClick={addProcess} className="btn-ghost w-full mt-5 border-dashed">
-        <Plus size={15} /> Add another process
+        <Plus size={15} /> {t('review.addProcess')}
       </button>
 
       <div className="mt-8 flex items-center justify-between">
         <button className="btn-ghost !py-2 !px-4 text-xs" onClick={onBack}>
-          <ArrowLeft size={14} /> Re-describe
+          <ArrowLeft size={14} /> {t('review.redescribe')}
         </button>
         <button
           className="btn-dark"
           onClick={onConfirm}
           disabled={!canConfirm}
-          title={canConfirm ? undefined : 'Every process needs a title, and every step needs a name'}
+          title={canConfirm ? undefined : t('review.confirmDisabledTitle')}
         >
-          Looks right — save {processes.length} process{processes.length === 1 ? '' : 'es'} <ArrowRight size={15} />
+          {t('review.confirmSave', { n: processes.length, processWord })} <ArrowRight size={15} />
         </button>
       </div>
     </div>

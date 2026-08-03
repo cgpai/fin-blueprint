@@ -7,6 +7,7 @@ import {
 } from '../lib/blueprintApi';
 import { SUBFUNCTIONS_LIST } from '../data/mockData';
 import { Persona } from '../types';
+import { useT } from '../lib/i18n';
 
 const LEVELS: Persona[] = ['L1', 'L2', 'L3', 'L4', 'Admin'];
 
@@ -20,6 +21,7 @@ function getToken(): string | null {
  * onboarding in remote mode (App.tsx routes straight to RemoteLogin).
  */
 export default function RemoteUserAdmin() {
+  const t = useT();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [level, setLevel] = useState<Persona>('L4');
@@ -54,7 +56,7 @@ export default function RemoteUserAdmin() {
       setName('');
       setEmail('');
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Could not create user.');
+      setCreateError(err instanceof Error ? err.message : t('remoteAdmin.createError'));
     } finally {
       setCreating(false);
     }
@@ -70,7 +72,7 @@ export default function RemoteUserAdmin() {
       const { tempPassword } = await adminResetRemotePassword(token, resetUsername.trim());
       setResetTempPassword(tempPassword);
     } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Could not reset password.');
+      setResetError(err instanceof Error ? err.message : t('remoteAdmin.resetError'));
     } finally {
       setResetBusy(false);
     }
@@ -83,9 +85,13 @@ export default function RemoteUserAdmin() {
     setActiveMessage('');
     try {
       await adminSetRemoteActive(token, activeUsername.trim(), active);
-      setActiveMessage(`${activeUsername.trim()} is now ${active ? 'active' : 'deactivated'}.`);
+      setActiveMessage(
+        active
+          ? t('remoteAdmin.activeNow', { username: activeUsername.trim() })
+          : t('remoteAdmin.deactivatedNow', { username: activeUsername.trim() }),
+      );
     } catch (err) {
-      setActiveMessage(err instanceof Error ? err.message : 'Could not update user.');
+      setActiveMessage(err instanceof Error ? err.message : t('remoteAdmin.updateError'));
     } finally {
       setActiveBusy(false);
     }
@@ -95,15 +101,14 @@ export default function RemoteUserAdmin() {
     <div className="card p-6 space-y-6">
       <div>
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <UserPlus size={15} /> Create a new account
+          <UserPlus size={15} /> {t('remoteAdmin.createTitle')}
         </h3>
         <p className="text-xs text-mute mt-0.5">
-          This is the only way anyone gets in — there's no self-signup. Send them the username and
-          temporary password privately (Slack DM, in person), not in a group channel or email thread.
+          {t('remoteAdmin.createSub')}
         </p>
         <div className="grid sm:grid-cols-2 gap-3 mt-4">
-          <input className="field" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="field" placeholder="Work email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="field" placeholder={t('common.fullName')} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="field" placeholder={t('common.workEmail')} value={email} onChange={(e) => setEmail(e.target.value)} />
           <select className="field" value={level} onChange={(e) => setLevel(e.target.value as Persona)}>
             {LEVELS.map((lvl) => (
               <option key={lvl} value={lvl}>{lvl}</option>
@@ -116,22 +121,22 @@ export default function RemoteUserAdmin() {
               ))}
             </select>
           ) : (
-            <div className="field flex items-center text-mute text-sm">All (directorate-wide)</div>
+            <div className="field flex items-center text-mute text-sm">{t('remoteAdmin.allDirectorate')}</div>
           )}
         </div>
         {createError && <div className="text-xs text-bad mt-2">{createError}</div>}
         <button className="btn-dark mt-3" onClick={createUser} disabled={!name || !email || creating}>
-          {creating ? 'Creating…' : 'Create account'}
+          {creating ? t('remoteAdmin.creating') : t('remoteAdmin.createAccount')}
         </button>
 
         {createdCreds && (
           <div className="mt-4 space-y-2">
             <div className="rounded-lg border border-line bg-white/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-mute">Username</div>
+              <div className="text-[10px] uppercase tracking-wide text-mute">{t('remoteAdmin.username')}</div>
               <div className="font-mono text-sm">{createdCreds.username}</div>
             </div>
             <div className="rounded-lg border border-line bg-white/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-mute">Temporary password (shown once)</div>
+              <div className="text-[10px] uppercase tracking-wide text-mute">{t('remoteAdmin.tempPasswordOnce')}</div>
               <div className="font-mono text-sm">{createdCreds.tempPassword}</div>
             </div>
           </div>
@@ -140,24 +145,24 @@ export default function RemoteUserAdmin() {
 
       <div className="border-t border-line pt-5">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <KeyRound size={15} /> Reset a password
+          <KeyRound size={15} /> {t('remoteAdmin.resetTitle')}
         </h3>
         <div className="flex gap-2 mt-3">
           <input
             className="field flex-1"
-            placeholder="Username"
+            placeholder={t('common.username')}
             value={resetUsername}
             onChange={(e) => setResetUsername(e.target.value)}
           />
           <button className="btn-ghost" onClick={resetPassword} disabled={!resetUsername || resetBusy}>
-            {resetBusy ? 'Resetting…' : 'Reset'}
+            {resetBusy ? t('remoteAdmin.resetting') : t('remoteAdmin.reset')}
           </button>
         </div>
         {resetError && <div className="text-xs text-bad mt-2">{resetError}</div>}
         {resetTempPassword && (
           <div className="rounded-lg border border-line bg-white/60 px-3 py-2 mt-2 flex items-center gap-2">
             <Copy size={13} className="text-mute" />
-            <span className="text-[10px] uppercase tracking-wide text-mute">New temp password:</span>
+            <span className="text-[10px] uppercase tracking-wide text-mute">{t('remoteAdmin.newTempPassword')}</span>
             <span className="font-mono text-sm">{resetTempPassword}</span>
           </div>
         )}
@@ -165,20 +170,20 @@ export default function RemoteUserAdmin() {
 
       <div className="border-t border-line pt-5">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <Power size={15} /> Activate / deactivate
+          <Power size={15} /> {t('remoteAdmin.activeTitle')}
         </h3>
         <div className="flex gap-2 mt-3">
           <input
             className="field flex-1"
-            placeholder="Username"
+            placeholder={t('common.username')}
             value={activeUsername}
             onChange={(e) => setActiveUsername(e.target.value)}
           />
           <button className="btn-ghost" onClick={() => setActive(true)} disabled={!activeUsername || activeBusy}>
-            Activate
+            {t('remoteAdmin.activate')}
           </button>
           <button className="btn-ghost" onClick={() => setActive(false)} disabled={!activeUsername || activeBusy}>
-            Deactivate
+            {t('remoteAdmin.deactivate')}
           </button>
         </div>
         {activeMessage && <div className="text-xs text-mute mt-2">{activeMessage}</div>}

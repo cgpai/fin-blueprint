@@ -1,4 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { enExtra1, idExtra1 } from './i18n-extra-part1';
+import { enExtra2, idExtra2 } from './i18n-extra-part2';
+import { enExtra3, idExtra3 } from './i18n-extra-part3';
+import { enExtra4, idExtra4 } from './i18n-extra-part4';
 
 export type Locale = 'en' | 'id';
 
@@ -600,7 +604,10 @@ const id: Dict = {
   'dash.mgr.board': 'Papan panduan perbaikan',
 };
 
-const catalogs: Record<Locale, Dict> = { en, id };
+const catalogs: Record<Locale, Dict> = {
+  en: { ...en, ...enExtra1, ...enExtra2, ...enExtra3, ...enExtra4 },
+  id: { ...id, ...idExtra1, ...idExtra2, ...idExtra3, ...idExtra4 },
+};
 
 function detectLocale(): Locale {
   try {

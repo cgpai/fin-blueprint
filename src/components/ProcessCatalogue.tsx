@@ -33,8 +33,23 @@ import {
 } from 'lucide-react';
 import { Persona, Process, SystemItem, DeploymentPlan } from '../types';
 import { SUBFUNCTIONS_LIST } from '../data/mockData';
+import { classLabel, useLocale, useT } from '../lib/i18n';
 import { timeAgo } from '../lib/utils';
 import { Avatar, ClassChip, EmptyState, Meter, StatusChip } from './ui';
+
+const STATUS_FILTER = ['Draft', 'Submitted', 'Refined', 'Approved'] as const;
+const STATUS_I18N: Record<(typeof STATUS_FILTER)[number], string> = {
+  Draft: 'catalogue.status.draft',
+  Submitted: 'catalogue.status.submitted',
+  Refined: 'catalogue.status.refined',
+  Approved: 'catalogue.status.approved',
+};
+
+function solutionTypeLabel(type: string, t: ReturnType<typeof useT>) {
+  if (type === 'Agentic AI') return t('catalogue.solutionType.agenticAi');
+  if (type === 'RPA / Automation') return t('catalogue.solutionType.rpa');
+  return type;
+}
 
 function ProcessDetail({
   proc,
@@ -57,6 +72,8 @@ function ProcessDetail({
   profileRole?: Persona;
   onSaveProcess?: (proc: Process) => void;
 }) {
+  const t = useT();
+  const { locale } = useLocale();
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [errorPlan, setErrorPlan] = useState<string | null>(null);
@@ -127,14 +144,14 @@ function ProcessDetail({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate deployment plan from the blueprint server.');
+        throw new Error(t('catalogue.errorPlanServer'));
       }
 
       const data = await response.json();
       setPlan(data);
       setLastGeneratedKey(currentKey);
     } catch (err: any) {
-      setErrorPlan(err.message || 'An error occurred while generating deployment options.');
+      setErrorPlan(err.message || t('catalogue.errorPlanGeneric'));
     } finally {
       setLoadingPlan(false);
     }
@@ -169,7 +186,7 @@ function ProcessDetail({
   return (
     <div id="process-detail-view" className="animate-fade-up space-y-4">
       <button onClick={onBack} className="btn-ghost !py-2 !px-4 text-xs print:hidden">
-        <ArrowLeft size={13} /> All processes
+        <ArrowLeft size={13} /> {t('catalogue.backToAll')}
       </button>
 
       {/* Header card */}
@@ -181,12 +198,12 @@ function ProcessDetail({
               <span className="chip">{proc.subFunction}</span>
               {proc.isShared && (
                 <span className="chip bg-veil-soft border-transparent text-veil-deep">
-                  <UsersRound size={11} /> Shared
+                  <UsersRound size={11} /> {t('catalogue.shared')}
                 </span>
               )}
               {!canModify && (
                 <span className="chip bg-bad/10 border-bad/30 text-bad flex items-center gap-1 font-semibold animate-pulse">
-                  <Lock size={11} /> View-Only (Locked)
+                  <Lock size={11} /> {t('catalogue.viewOnlyLocked')}
                 </span>
               )}
             </div>
@@ -194,7 +211,7 @@ function ProcessDetail({
             <p className="text-sm text-mute mt-2 leading-relaxed max-w-2xl">{proc.description}</p>
           </div>
           <div className="flex gap-2 shrink-0 print:hidden">
-            <button onClick={() => window.print()} className="btn-ghost !p-2.5" title="Export / print (PDF)" aria-label="Export or print">
+            <button onClick={() => window.print()} className="btn-ghost !p-2.5" title={t('catalogue.exportPrintTitle')} aria-label={t('catalogue.exportPrintAria')}>
               <Printer size={15} />
             </button>
             <button
@@ -203,13 +220,13 @@ function ProcessDetail({
               className={`btn-ghost !py-2.5 !px-4 text-xs ${
                 !canModify ? 'opacity-50 cursor-not-allowed border-line text-mute bg-veil-soft/30' : ''
               }`}
-              title={!canModify ? 'This process is shared and locked for your tier' : 'Edit process details'}
+              title={!canModify ? t('catalogue.editLockedTitle') : t('catalogue.editTitle')}
             >
               {canModify ? <PencilLine size={13} /> : <Lock size={13} className="text-bad" />}
-              {canModify ? 'Edit' : 'View-Only (Locked)'}
+              {canModify ? t('catalogue.edit') : t('catalogue.viewOnlyLocked')}
             </button>
             {canModify && (
-              <button onClick={onDelete} className="btn-ghost !p-2.5 hover:!border-bad hover:text-bad" title="Delete" aria-label="Delete process">
+              <button onClick={onDelete} className="btn-ghost !p-2.5 hover:!border-bad hover:text-bad" title={t('catalogue.deleteTitle')} aria-label={t('catalogue.deleteAria')}>
                 <Trash2 size={15} />
               </button>
             )}
@@ -218,14 +235,14 @@ function ProcessDetail({
 
         <div className="grid sm:grid-cols-4 gap-5 mt-6 pt-5 border-t border-line">
           <div>
-            <div className="label">Owner</div>
+            <div className="label">{t('catalogue.owner')}</div>
             <div className="flex items-center gap-2">
               <Avatar name={proc.ownerName} size={26} />
               <div>
                 <div className="text-sm font-medium leading-tight">{proc.ownerName}</div>
                 <div className="text-[11px] text-faint">
                   {proc.manualRoleOverride ? (
-                    <span className="text-citron-deep font-semibold" title="Manually overridden role">{proc.manualRoleOverride}</span>
+                    <span className="text-citron-deep font-semibold" title={t('catalogue.manualRoleOverrideTitle')}>{proc.manualRoleOverride}</span>
                   ) : (
                     proc.ownerLevel
                   )} · {timeAgo(proc.lastUpdated)}
@@ -234,27 +251,27 @@ function ProcessDetail({
             </div>
           </div>
           <div>
-            <div className="label">Completeness</div>
+            <div className="label">{t('catalogue.completeness')}</div>
             <div className="flex items-center gap-2">
               <div className="flex-1"><Meter value={proc.completenessScore} /></div>
               <span className="text-sm font-bold">{proc.completenessScore}%</span>
             </div>
           </div>
           <div>
-            <div className="label">Automation suitability</div>
+            <div className="label">{t('catalogue.automationSuitability')}</div>
             {proc.automationSuitability != null ? (
               <div className="flex items-center gap-2">
                 <div className="flex-1"><Meter value={proc.automationSuitability} tone="veil" /></div>
                 <span className="text-sm font-bold">{proc.automationSuitability}</span>
               </div>
             ) : (
-              <span className="text-xs text-faint">Run AI refinement to score</span>
+              <span className="text-xs text-faint">{t('catalogue.runRefinementToScore')}</span>
             )}
           </div>
           <div>
-            <div className="label">Collaborators</div>
+            <div className="label">{t('catalogue.collaborators')}</div>
             <div className="text-xs text-inksoft">
-              {proc.taggedUsers.length ? proc.taggedUsers.join(', ') : <span className="text-faint">None tagged</span>}
+              {proc.taggedUsers.length ? proc.taggedUsers.join(', ') : <span className="text-faint">{t('catalogue.noneTagged')}</span>}
             </div>
           </div>
         </div>
@@ -262,7 +279,7 @@ function ProcessDetail({
 
       {proc.gaps.length > 0 && (
         <div className="card bg-blush/40 border-transparent px-5 py-4">
-          <div className="text-xs font-bold text-warn mb-1.5">Open gaps flagged for completion</div>
+          <div className="text-xs font-bold text-warn mb-1.5">{t('catalogue.gapsHeading')}</div>
           <ul className="text-sm text-inksoft space-y-1 list-disc list-inside">
             {proc.gaps.map((gap, i) => (
               <li key={i}>{gap}</li>
@@ -274,7 +291,7 @@ function ProcessDetail({
       {/* Step timeline */}
       <div className="card p-6 print:break-inside-avoid">
         <h3 className="font-display font-semibold flex items-center gap-2">
-          <GitBranch size={16} className="text-veil-deep" /> Workflow steps
+          <GitBranch size={16} className="text-veil-deep" /> {t('catalogue.workflowSteps')}
           <span className="text-mute font-normal text-sm">({proc.steps.length})</span>
         </h3>
         <ol className="mt-5 relative">
@@ -296,25 +313,25 @@ function ProcessDetail({
                 <div className="mt-3 grid sm:grid-cols-2 gap-x-8 gap-y-2 max-w-2xl">
                   {step.inputs.length > 0 && (
                     <div className="text-xs">
-                      <span className="font-semibold text-mute inline-flex items-center gap-1"><ArrowDownRight size={11} /> In:</span>{' '}
+                      <span className="font-semibold text-mute inline-flex items-center gap-1"><ArrowDownRight size={11} /> {t('catalogue.stepIn')}</span>{' '}
                       <span className="text-inksoft">{step.inputs.join(', ')}</span>
                     </div>
                   )}
                   {step.outputs.length > 0 && (
                     <div className="text-xs">
-                      <span className="font-semibold text-mute inline-flex items-center gap-1"><ArrowUpRight size={11} /> Out:</span>{' '}
+                      <span className="font-semibold text-mute inline-flex items-center gap-1"><ArrowUpRight size={11} /> {t('catalogue.stepOut')}</span>{' '}
                       <span className="text-inksoft">{step.outputs.join(', ')}</span>
                     </div>
                   )}
                   {step.decisionPoints.length > 0 && (
                     <div className="text-xs sm:col-span-2">
-                      <span className="font-semibold text-mute">Decisions:</span>{' '}
+                      <span className="font-semibold text-mute">{t('catalogue.stepDecisions')}</span>{' '}
                       <span className="text-inksoft">{step.decisionPoints.join(' · ')}</span>
                     </div>
                   )}
                   {step.handOffs.length > 0 && (
                     <div className="text-xs sm:col-span-2">
-                      <span className="font-semibold text-mute">Hand-offs:</span>{' '}
+                      <span className="font-semibold text-mute">{t('catalogue.stepHandoffs')}</span>{' '}
                       <span className="text-inksoft">{step.handOffs.join(' · ')}</span>
                     </div>
                   )}
@@ -328,7 +345,12 @@ function ProcessDetail({
                 )}
                 {step.aiRationale && (
                   <div className="mt-2.5 text-[11px] text-mute bg-canvas rounded-xl px-3 py-2 max-w-2xl">
-                    <span className="font-semibold">Why {cls ? cls.replace(/-/g, ' ') : 'this'}?</span> {step.aiRationale}
+                    <span className="font-semibold">
+                      {cls
+                        ? t('catalogue.stepWhy', { classification: classLabel(locale, cls) })
+                        : t('catalogue.stepWhy', { classification: t('class.unclassified') })}
+                    </span>{' '}
+                    {step.aiRationale}
                   </div>
                 )}
               </li>
@@ -340,7 +362,7 @@ function ProcessDetail({
       {/* Consolidated systems */}
       <div className="card p-6 print:break-inside-avoid">
         <h3 className="font-display font-semibold flex items-center gap-2">
-          <Layers size={16} className="text-veil-deep" /> Systems touched by this process
+          <Layers size={16} className="text-veil-deep" /> {t('catalogue.systemsTouched')}
         </h3>
         <div className="flex flex-wrap gap-2 mt-4">
           {systems.length ? (
@@ -348,7 +370,7 @@ function ProcessDetail({
               <span key={sys} className="chip !py-1.5 !px-3.5 bg-veil-soft border-transparent text-veil-deep">{sys}</span>
             ))
           ) : (
-            <span className="text-sm text-faint">No systems tagged yet.</span>
+            <span className="text-sm text-faint">{t('catalogue.noSystemsTagged')}</span>
           )}
         </div>
       </div>
@@ -358,10 +380,10 @@ function ProcessDetail({
         <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-line">
           <div>
             <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <Sparkles size={15} className="text-citron-deep animate-pulse" /> AI Deployment Roadmap &amp; Hackathon Pitch
+              <Sparkles size={15} className="text-citron-deep animate-pulse" /> {t('catalogue.roadmapTitle')}
             </h3>
             <p className="text-xs text-mute mt-0.5">
-              Draft step-by-step RPA/cognitive pipelines grounded in your registered systems and generate campaign copy for Project Vanguard.
+              {t('catalogue.roadmapSubtitle')}
             </p>
           </div>
           {!plan && !loadingPlan && (
@@ -369,7 +391,7 @@ function ProcessDetail({
               onClick={generateDeploymentPlan}
               className="btn-dark flex items-center gap-1.5 !py-1.5 !px-3.5 text-xs font-semibold"
             >
-              <Cpu size={13} /> Architect Deployment Blueprint
+              <Cpu size={13} /> {t('catalogue.architectBlueprint')}
             </button>
           )}
         </div>
@@ -379,25 +401,25 @@ function ProcessDetail({
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-veil text-ink mb-2">
               <Cpu className="animate-spin text-citron-deep" size={20} />
             </div>
-            <p className="text-xs font-medium text-ink">Siloam Vanguard AI is compiling integration routes...</p>
+            <p className="text-xs font-medium text-ink">{t('catalogue.loadingPlan')}</p>
             <div className="max-w-xs mx-auto space-y-1.5">
               <div className="h-1 w-full bg-veil overflow-hidden rounded-full">
                 <div className="h-full bg-citron animate-[shimmer_1.5s_infinite]" style={{ width: '60%' }}></div>
               </div>
-              <p className="text-[10px] text-faint italic font-normal">Standardizing schemas, configuring validation gates, &amp; writing pitch decks...</p>
+              <p className="text-[10px] text-faint italic font-normal">{t('catalogue.loadingPlanDetail')}</p>
             </div>
           </div>
         )}
 
         {errorPlan && (
           <div className="p-4 bg-bad/10 border border-bad/30 rounded-2xl text-center">
-            <p className="text-xs text-bad font-semibold">Failed to build deployment plan</p>
+            <p className="text-xs text-bad font-semibold">{t('catalogue.errorPlanTitle')}</p>
             <p className="text-[11px] text-mute mt-1">{errorPlan}</p>
             <button
               onClick={generateDeploymentPlan}
               className="btn-ghost !py-1.5 !px-3 mt-3 text-xs"
             >
-              Retry Architecture Build
+              {t('catalogue.retryArchitecture')}
             </button>
           </div>
         )}
@@ -408,16 +430,16 @@ function ProcessDetail({
               <Sparkles size={16} />
             </div>
             <div className="max-w-md mx-auto">
-              <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">Ready to deploy?</h4>
+              <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">{t('catalogue.readyToDeploy')}</h4>
               <p className="text-xs text-mute mt-1.5 leading-relaxed">
-                Propose a complete 4-phase step-by-step deployment outline. Our engine maps manual steps to automated loops, calculates the value-cost-benefit metrics, and maps critical tool subscriptions and strategic partnerships.
+                {t('catalogue.readyToDeployBody')}
               </p>
             </div>
             <button
               onClick={generateDeploymentPlan}
               className="btn-dark inline-flex items-center gap-1.5 !py-1.5 !px-4 text-xs font-semibold mt-2"
             >
-              <Cpu size={13} /> Propose Deployment Steps
+              <Cpu size={13} /> {t('catalogue.proposeSteps')}
             </button>
           </div>
         )}
@@ -427,7 +449,7 @@ function ProcessDetail({
             {/* Banner details */}
             <div className="bg-canvas border border-line rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-mute uppercase tracking-widest block">Recommended Framework</span>
+                <span className="text-[10px] font-bold text-mute uppercase tracking-widest block">{t('catalogue.recommendedFramework')}</span>
                 <div className="flex items-center gap-2">
                   <span className={`chip !px-2.5 !py-1 font-mono text-[11px] font-bold ${
                     plan.recommendedSolutionType === 'Agentic AI' 
@@ -436,9 +458,9 @@ function ProcessDetail({
                       ? 'bg-citron text-ink font-semibold border-transparent' 
                       : 'bg-veil text-ink border-transparent'
                   }`}>
-                    {plan.recommendedSolutionType}
+                    {solutionTypeLabel(plan.recommendedSolutionType, t)}
                   </span>
-                  <span className="text-xs text-mute">Solution designed with supervisor override gates</span>
+                  <span className="text-xs text-mute">{t('catalogue.supervisorOverrideGates')}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -446,17 +468,17 @@ function ProcessDetail({
                   <button
                     onClick={handleSaveRoadmap}
                     className={`${isRoadmapSaved ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'btn-dark'} flex items-center gap-1.5 !py-1.5 !px-3.5 text-xs font-semibold rounded-full`}
-                    title="Save this AI deployment roadmap to the process catalog"
+                    title={t('catalogue.saveRoadmapTitle')}
                   >
-                    <Save size={12} /> {isRoadmapSaved ? 'Roadmap Saved ✓' : 'Save Roadmap'}
+                    <Save size={12} /> {isRoadmapSaved ? t('catalogue.roadmapSaved') : t('catalogue.saveRoadmap')}
                   </button>
                 )}
                 <button
                   onClick={generateDeploymentPlan}
                   className="btn-ghost flex items-center gap-1.5 !py-1.5 !px-3 text-xs"
-                  title="Re-run architecture proposal"
+                  title={t('catalogue.regenerateTitle')}
                 >
-                  <Sparkles size={12} /> Regenerate Proposal
+                  <Sparkles size={12} /> {t('catalogue.regenerateProposal')}
                 </button>
               </div>
             </div>
@@ -466,54 +488,54 @@ function ProcessDetail({
               <div className="flex items-center gap-1.5">
                 <TrendingUp size={14} className="text-citron-deep" />
                 <h4 className="font-display font-semibold text-xs text-ink uppercase tracking-wider">
-                  Value, Cost, &amp; Benefit Analysis (IDR)
+                  {t('catalogue.vcbAnalysis')}
                 </h4>
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {/* ROI Card */}
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Return on Investment</span>
+                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.roiLabel')}</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-ink">+{plan.costBenefitAnalysis?.roiPercent || 380}%</span>
-                    <span className="text-[10px] text-emerald-600 font-semibold">ROI</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">{t('catalogue.roiBadge')}</span>
                   </div>
                   <div className="text-[10px] text-faint">
-                    Payback in <strong className="text-ink">{plan.costBenefitAnalysis?.paybackPeriodMonths || 3} months</strong>
+                    {t('catalogue.paybackMonths', { months: plan.costBenefitAnalysis?.paybackPeriodMonths || 3 })}
                   </div>
                 </div>
 
                 {/* Savings Card */}
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Est. Annual Savings</span>
+                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.estAnnualSavings')}</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-base font-bold text-ink">{formatIDR(toIDR(plan.costBenefitAnalysis?.estimatedAnnualSavingsUSD || 32000))}</span>
                   </div>
                   <div className="text-[10px] text-faint">
-                    Ongoing labor &amp; error reduction
+                    {t('catalogue.laborErrorReduction')}
                   </div>
                 </div>
 
                 {/* Labor Saved Card */}
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Manual Effort Released</span>
+                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.manualEffortReleased')}</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-ink">{plan.costBenefitAnalysis?.manualHoursReducedPerMonth || 85}</span>
-                    <span className="text-[10px] text-mute">hours/mo</span>
+                    <span className="text-[10px] text-mute">{t('catalogue.hoursPerMonth')}</span>
                   </div>
                   <div className="text-[10px] text-faint">
-                    Re-allocated to high-value tasks
+                    {t('catalogue.reallocatedTasks')}
                   </div>
                 </div>
 
                 {/* Dev & Tooling Cost Card */}
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Annual Tooling &amp; OPEX</span>
+                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.annualToolingOpex')}</span>
                   <div className="flex items-baseline gap-1">
                     <span className="text-base font-bold text-ink">{formatIDR(toIDR(plan.costBenefitAnalysis?.annualSubscriptionCostUSD || 2400))}</span>
                   </div>
                   <div className="text-[10px] text-faint leading-tight mt-0.5">
-                    Excludes one-time dev cost of {formatIDR(toIDR(plan.costBenefitAnalysis?.developmentCostUSD || 6000))}
+                    {t('catalogue.excludesDevCost', { amount: formatIDR(toIDR(plan.costBenefitAnalysis?.developmentCostUSD || 6000)) })}
                   </div>
                 </div>
               </div>
@@ -526,25 +548,25 @@ function ProcessDetail({
                   </div>
                   <div className="space-y-1">
                     <h5 className="text-xs font-semibold text-ink-soft">
-                      ROI &amp; Vertex AI (Gemini Suite) Cost Logic
+                      {t('catalogue.roiLogicTitle')}
                     </h5>
                     <p className="text-[11px] text-mute leading-relaxed">
-                      Traditional RPA robot licenses typically demand upwards of <strong className="text-ink-soft">Rp 2.400.000 to Rp 8.000.000</strong> per month. In comparison, <strong className="text-emerald-700">Google Vertex AI (Gemini Model Suite)</strong> uses consumption-based token pricing. For a standard healthcare finance flow processing 10.000 invoices/claims a month, Gemini 1.5 Flash uses less than <strong className="text-emerald-700">Rp 75.000 (approx. $4.50)</strong> total! This maximizes margins and enables an accelerated payback timeline.
+                      {t('catalogue.roiLogicBody')}
                     </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-3.5 border-t border-emerald-100/60 text-[11px]">
                   <div className="space-y-1">
-                    <span className="font-semibold text-emerald-800 block">Value Offered Formula</span>
-                    <span className="text-mute block leading-normal">Hours Released × Staff Wage Rate + Prevented Claim Denial Leakage</span>
+                    <span className="font-semibold text-emerald-800 block">{t('catalogue.valueFormulaTitle')}</span>
+                    <span className="text-mute block leading-normal">{t('catalogue.valueFormulaBody')}</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="font-semibold text-emerald-800 block">Gemini API Advantage</span>
-                    <span className="text-mute block leading-normal">Pay-per-token API pricing replaces expensive fixed software bot licenses</span>
+                    <span className="font-semibold text-emerald-800 block">{t('catalogue.geminiAdvantageTitle')}</span>
+                    <span className="text-mute block leading-normal">{t('catalogue.geminiAdvantageBody')}</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="font-semibold text-emerald-800 block">Fast Break-Even</span>
-                    <span className="text-mute block leading-normal">No heavy upfront capital infrastructure; initial payback reached in ~3 months</span>
+                    <span className="font-semibold text-emerald-800 block">{t('catalogue.fastBreakEvenTitle')}</span>
+                    <span className="text-mute block leading-normal">{t('catalogue.fastBreakEvenBody')}</span>
                   </div>
                 </div>
               </div>
@@ -553,7 +575,7 @@ function ProcessDetail({
             {/* 4-Phase Accordion */}
             <div className="space-y-2.5">
               <h4 className="font-display font-semibold text-xs text-ink uppercase tracking-wider">
-                Phase-by-Phase Roadmap Pipeline
+                {t('catalogue.phasePipeline')}
               </h4>
               <div className="space-y-2">
                 {plan.deploymentSteps.map((step, idx) => {
@@ -587,7 +609,7 @@ function ProcessDetail({
 
                           {step.systemsInvolved.length > 0 && (
                             <div className="space-y-1">
-                              <span className="text-[10px] text-faint uppercase font-semibold">Systems Touched</span>
+                              <span className="text-[10px] text-faint uppercase font-semibold">{t('catalogue.systemsTouchedPhase')}</span>
                               <div className="flex flex-wrap gap-1.5">
                                 {step.systemsInvolved.map((sys, sysIdx) => (
                                   <span key={sysIdx} className="chip !text-[10px] bg-veil-soft border-transparent text-veil-deep">
@@ -599,7 +621,7 @@ function ProcessDetail({
                           )}
 
                           <div className="space-y-2">
-                            <span className="text-[10px] text-faint uppercase font-semibold block">Action Items Checklist</span>
+                            <span className="text-[10px] text-faint uppercase font-semibold block">{t('catalogue.actionChecklist')}</span>
                             <div className="space-y-1.5">
                               {step.actionItems.map((item, itemIdx) => {
                                 const checkKey = `${idx}-${itemIdx}`;
@@ -639,10 +661,10 @@ function ProcessDetail({
                   <CreditCard size={14} className="text-citron-deep shrink-0" />
                   <div>
                     <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
-                      Additional Tool Subscriptions
+                      {t('catalogue.additionalSubscriptions')}
                     </h4>
                     <p className="text-[10px] text-faint">
-                      Estimated recurring fees matched to deployment Key Activities
+                      {t('catalogue.subscriptionsSubtitle')}
                     </p>
                   </div>
                 </div>
@@ -658,15 +680,15 @@ function ProcessDetail({
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-semibold text-ink">{sub.toolName}</span>
                             <span className="chip !text-[10px] font-mono bg-veil border-transparent text-ink font-semibold">
-                              {formatIDR(costIDR)}/mo
+                              {formatIDR(costIDR)}{t('catalogue.perMonth')}
                             </span>
                           </div>
                           <div className="text-[11px] text-mute leading-relaxed">
-                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block mb-0.5">Key Enabled Activity</span>
+                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block mb-0.5">{t('catalogue.keyEnabledActivity')}</span>
                             {sub.linkedKeyActivity}
                             {isGemini && (
                               <span className="text-[10px] text-emerald-600 block mt-1 font-medium italic">
-                                *Note: Gemini API is billed on micro-usage ($0.075/1M tokens), resulting in extremely low operational costs.
+                                {t('catalogue.geminiCostNote')}
                               </span>
                             )}
                           </div>
@@ -674,7 +696,7 @@ function ProcessDetail({
                       );
                     })
                   ) : (
-                    <p className="text-xs text-faint italic">No additional tooling subscriptions required for this framework.</p>
+                    <p className="text-xs text-faint italic">{t('catalogue.noSubscriptions')}</p>
                   )}
                 </div>
               </div>
@@ -685,10 +707,10 @@ function ProcessDetail({
                   <HeartHandshake size={14} className="text-veil-deep shrink-0" />
                   <div>
                     <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
-                      Required Strategic Partnerships
+                      {t('catalogue.strategicPartnerships')}
                     </h4>
                     <p className="text-[10px] text-faint">
-                      Essential collaborations needed to harvest maximum value and compliance
+                      {t('catalogue.partnershipsSubtitle')}
                     </p>
                   </div>
                 </div>
@@ -703,18 +725,18 @@ function ProcessDetail({
                         </div>
                         <div className="text-[11px] text-mute space-y-1.5 leading-relaxed">
                           <div>
-                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block">Integration Role</span>
+                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block">{t('catalogue.integrationRole')}</span>
                             {partner.roleDescription}
                           </div>
                           <div>
-                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block text-emerald-700">Value Unlocked</span>
+                            <span className="text-[9px] uppercase tracking-wider text-faint font-bold block text-emerald-700">{t('catalogue.valueUnlocked')}</span>
                             {partner.benefitsCaptured}
                           </div>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-faint italic">No external or cross-department partnerships required.</p>
+                    <p className="text-xs text-faint italic">{t('catalogue.noPartnerships')}</p>
                   )}
                 </div>
               </div>
@@ -751,6 +773,7 @@ export default function ProcessCatalogue({
   onCreateNew: () => void;
   onSaveProcess: (proc: Process) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [subFunction, setSubFunction] = useState('');
   const [status, setStatus] = useState('');
@@ -780,24 +803,24 @@ export default function ProcessCatalogue({
     };
 
     const headers = [
-      'Process ID',
-      'Title',
-      'Description',
-      'Line of Work',
-      'Status',
-      'Owner',
-      'Last Updated',
-      'Completeness Score (%)',
-      'Automation Suitability (%)',
-      'Steps Count',
-      'Systems Involved',
-      'Steps Detail (Name [Classification])'
+      t('catalogue.csv.processId'),
+      t('catalogue.csv.title'),
+      t('catalogue.csv.description'),
+      t('catalogue.csv.lineOfWork'),
+      t('catalogue.csv.status'),
+      t('catalogue.csv.owner'),
+      t('catalogue.csv.lastUpdated'),
+      t('catalogue.csv.completeness'),
+      t('catalogue.csv.automation'),
+      t('catalogue.csv.stepsCount'),
+      t('catalogue.csv.systems'),
+      t('catalogue.csv.stepsDetail'),
     ];
 
     const rows = filtered.map((p) => {
       const systems = Array.from(new Set(p.steps.flatMap((s) => s.systems))).join(', ');
       const stepsDetail = p.steps
-        .map((s) => `${s.name} [${s.aiClassification || 'Unclassified'}]`)
+        .map((s) => `${s.name} [${s.aiClassification || t('catalogue.csv.unclassified')}]`)
         .join('; ');
 
       return [
@@ -848,25 +871,28 @@ export default function ProcessCatalogue({
     <div className="animate-fade-up space-y-5">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">Process catalogue</h2>
+          <h2 className="font-display text-xl font-semibold tracking-tight">{t('catalogue.title')}</h2>
           <p className="text-sm text-mute mt-0.5">
-            {processes.length} documented process{processes.length === 1 ? '' : 'es'} across the directorate.
+            {t('catalogue.subtitle', {
+              count: processes.length,
+              plural: processes.length === 1 ? '' : t('catalogue.subtitlePlural'),
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={exportToCSV}
             className="bg-white hover:bg-canvas-soft border border-line hover:border-faint text-ink font-semibold flex items-center gap-1.5 !py-2 !px-4 text-xs rounded-full transition-all shadow-sm cursor-pointer"
-            title="Export catalog data into a formatted CSV file"
+            title={t('catalogue.exportCsvTitle')}
           >
-            <Download size={13} /> Export Catalog CSV
+            <Download size={13} /> {t('catalogue.exportCsv')}
           </button>
           {currentPersona !== 'Admin' && (
             <button
               onClick={onCreateNew}
               className="btn-dark flex items-center gap-1.5 !py-2 !px-4 text-xs font-semibold rounded-full cursor-pointer"
             >
-              <Plus size={13} /> Capture Process
+              <Plus size={13} /> {t('catalogue.captureProcess')}
             </button>
           )}
         </div>
@@ -878,28 +904,28 @@ export default function ProcessCatalogue({
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             className="field !rounded-full !py-2 !pl-9 !pr-4 !w-60 text-sm"
-            placeholder="Search title, owner, steps…"
+            placeholder={t('catalogue.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         <select className="field !rounded-full !py-2 !px-4 !w-auto text-sm cursor-pointer" value={subFunction} onChange={(e) => setSubFunction(e.target.value)}>
-          <option value="">All lines of work</option>
+          <option value="">{t('catalogue.filterAllLines')}</option>
           {SUBFUNCTIONS_LIST.map((sf) => (
             <option key={sf} value={sf}>{sf}</option>
           ))}
         </select>
         <select className="field !rounded-full !py-2 !px-4 !w-auto text-sm cursor-pointer" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Any status</option>
-          {['Draft', 'Submitted', 'Refined', 'Approved'].map((s) => (
-            <option key={s} value={s}>{s}</option>
+          <option value="">{t('catalogue.filterAnyStatus')}</option>
+          {STATUS_FILTER.map((s) => (
+            <option key={s} value={s}>{t(STATUS_I18N[s])}</option>
           ))}
         </select>
         <button
           onClick={() => setMineOnly(!mineOnly)}
           className={`chip !py-2 !px-4 cursor-pointer transition-colors ${mineOnly ? 'bg-ink text-white border-transparent' : 'hover:border-faint'}`}
         >
-          Mine only
+          {t('catalogue.mineOnly')}
         </button>
       </div>
 
@@ -907,19 +933,19 @@ export default function ProcessCatalogue({
         processes.length === 0 ? (
           <EmptyState
             icon={<BookOpen size={22} />}
-            title="Your catalogue is empty"
-            body="Document your first working process — the guided journey takes about ten minutes, and the AI does the heavy lifting."
+            title={t('catalogue.emptyTitle')}
+            body={t('catalogue.emptyBody')}
             action={
               currentPersona !== 'Admin' ? (
-                <button onClick={onCreateNew} className="btn-dark mt-2"><Plus size={15} /> Capture your first process</button>
+                <button onClick={onCreateNew} className="btn-dark mt-2"><Plus size={15} /> {t('catalogue.emptyAction')}</button>
               ) : undefined
             }
           />
         ) : (
           <EmptyState
             icon={<Search size={22} />}
-            title="No matches"
-            body="No process matches those filters — try clearing the search or switching line of work."
+            title={t('catalogue.noMatchesTitle')}
+            body={t('catalogue.noMatchesBody')}
           />
         )
       ) : (
@@ -946,7 +972,7 @@ export default function ProcessCatalogue({
                     <Avatar name={proc.ownerName} size={24} />
                     <span className="text-xs font-medium truncate">{proc.ownerName}</span>
                   </div>
-                  <span className="chip !text-[11px] shrink-0">{proc.steps.length} steps</span>
+                  <span className="chip !text-[11px] shrink-0">{t('catalogue.stepsCount', { count: proc.steps.length })}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1"><Meter value={proc.completenessScore} /></div>

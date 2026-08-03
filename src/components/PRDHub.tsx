@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Sparkles, FileText, Table, Users, Landmark, Layers, ArrowRight, Download, CheckCircle, Receipt, HardDrive, RefreshCw, X } from 'lucide-react';
+import { Sparkles, FileText, Table, Users, Landmark, Layers, Download, CheckCircle, Receipt, HardDrive, RefreshCw, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Process } from '../types';
+import { useT, type TFn } from '../lib/i18n';
 
-// Convert USD to IDR at 1 USD = Rp 16.000
 const toIDR = (usd: number) => usd * 16000;
 
 const formatIDR = (val: number) => {
@@ -20,7 +21,6 @@ const formatIDR = (val: number) => {
   }).format(val);
 };
 
-// Pricing standards basis (in IDR)
 const PRICING_STANDARDS = [
   { item: 'Google Gemini 1.5 Flash (Input)', rate: 'Rp 1.200', unit: 'per 1.000.000 tokens', category: 'LLM Token', desc: 'Sangat hemat untuk ekstraksi data masal dan pencocokan teks terstruktur.' },
   { item: 'Google Gemini 1.5 Flash (Output)', rate: 'Rp 4.800', unit: 'per 1.000.000 tokens', category: 'LLM Token', desc: 'Digunakan untuk menyusun format jawaban JSON atau draf jurnal akun.' },
@@ -33,7 +33,50 @@ const PRICING_STANDARDS = [
   { item: 'RPA Unattended Runner Runtime', rate: 'Rp 1.600.000', unit: 'per bulan', category: 'Otomasi Desktop', desc: 'Melakukan klik otomatis pada portal DJP PPN atau portal e-Claim BPJS.' },
 ];
 
-const BASE_ENGINES = [
+type EngineRecord = {
+  id: string;
+  title: string;
+  icon: LucideIcon;
+  description: string;
+  targetAudience: string;
+  masterUsers: string;
+  ecosystemApps: string;
+  overlappingProcesses: string[];
+  capexLogic: string;
+  opexLogic: string;
+  metrics: {
+    volume: string;
+    effort: string;
+    annualSavings: string;
+    payback: string;
+  };
+  specifications: string[];
+};
+
+const ENGINE_I18N_KEYS: Record<string, { title: string; description: string }> = {
+  'engine-claims': { title: 'prd.engine.claims.title', description: 'prd.engine.claims.description' },
+  'engine-ap': { title: 'prd.engine.ap.title', description: 'prd.engine.ap.description' },
+  'engine-treasury': { title: 'prd.engine.treasury.title', description: 'prd.engine.treasury.description' },
+  'engine-tax': { title: 'prd.engine.tax.title', description: 'prd.engine.tax.description' },
+};
+
+function isDynamicEngineId(id: string) {
+  return id.startsWith('engine-dynamic-');
+}
+
+function engineTitle(t: TFn, engine: EngineRecord) {
+  if (isDynamicEngineId(engine.id)) return t('prd.dynamicEngine.title');
+  const keys = ENGINE_I18N_KEYS[engine.id];
+  return keys ? t(keys.title) : engine.title;
+}
+
+function engineDescription(t: TFn, engine: EngineRecord) {
+  if (isDynamicEngineId(engine.id)) return t('prd.dynamicEngine.description');
+  const keys = ENGINE_I18N_KEYS[engine.id];
+  return keys ? t(keys.description) : engine.description;
+}
+
+const BASE_ENGINES: EngineRecord[] = [
   {
     id: 'engine-claims',
     title: 'AI Claims & Billing Settlement Engine',
@@ -48,7 +91,7 @@ const BASE_ENGINES = [
     metrics: {
       volume: '15.000 klaim & aktivitas dokter / bulan',
       effort: 'Mengurangi beban manual dari 220 jam menjadi 25 jam sebulan',
-      annualSavings: formatIDR(toIDR(45000)), // dynamic and structured
+      annualSavings: formatIDR(toIDR(45000)),
       payback: '2 Bulan',
     },
     specifications: [
@@ -138,19 +181,19 @@ interface PRDHubProps {
 }
 
 export default function PRDHub({ processes, isAdmin }: PRDHubProps) {
+  const t = useT();
   const [engines, setEngines] = useState(BASE_ENGINES);
   const [activeEngine, setActiveEngine] = useState<string>('engine-claims');
   const [activeSubTab, setActiveSubTab] = useState<'prd' | 'pricing'>('prd');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
-  const [deletingEngine, setDeletingEngine] = useState<(typeof BASE_ENGINES)[0] | null>(null);
+  const [deletingEngine, setDeletingEngine] = useState<EngineRecord | null>(null);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     setRefreshSuccess(false);
 
     setTimeout(() => {
-      // Find processes that are not currently mapped in any BASE_ENGINES
       const mappedProcessTitles = new Set(
         BASE_ENGINES.flatMap(e => e.overlappingProcesses)
       );
@@ -158,7 +201,7 @@ export default function PRDHub({ processes, isAdmin }: PRDHubProps) {
       const unmappedProcesses = processes.filter(p => !mappedProcessTitles.has(p.title) && p.title.trim() !== '');
 
       if (unmappedProcesses.length > 0) {
-        const newEngine = {
+        const newEngine: EngineRecord = {
           id: 'engine-dynamic-' + Date.now(),
           title: 'Custom AI Orchestration Engine',
           icon: Sparkles,
@@ -199,14 +242,14 @@ export default function PRDHub({ processes, isAdmin }: PRDHubProps) {
     const prdContent = `
 PRODUCT REQUIREMENT DOCUMENTATION (PRD) - CONSOLIDATED ENGINE
 ============================================================
-Engine Name: ${eng.title}
+Engine Name: ${engineTitle(t, eng)}
 Status: Proposed / Blueprint Validated
 Target Audience: ${eng.targetAudience}
 Master Users & Personas: ${eng.masterUsers}
 
 1. EXECUTIVE SUMMARY & OVERVIEW
 ----------------------------------
-${eng.description}
+${engineDescription(t, eng)}
 
 2. OVERLAPPING PROCESS CATALOGUE
 ----------------------------------
@@ -242,16 +285,15 @@ Make.com Scheduler: Rp 144.000 / month
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `PRD_Siloam_${eng.title.replace(/\s+/g, '_')}.txt`;
+    link.download = `PRD_Siloam_${engineTitle(t, eng).replace(/\s+/g, '_')}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const currentEngine = engines.find(e => e.id === activeEngine) || engines[0];
+  const currentEngine = engines.find(e => e.id === activeEngine) || engines[0]!;
 
   return (
     <div className="space-y-6 animate-fade-up" id="prd-hub-view">
-      {/* Introduction Card */}
       <div className="bg-white border border-line rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-3">
@@ -259,15 +301,15 @@ Make.com Scheduler: Rp 144.000 / month
               <Layers size={18} />
             </div>
             <div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">Consolidated PRD &amp; Engine Hub</h2>
-              <p className="text-xs text-mute mt-0.5">Automated overlap analysis across processes with unified backend architectures, costing rules, and Indonesian standard pricing.</p>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">{t('prd.title')}</h2>
+              <p className="text-xs text-mute mt-0.5">{t('prd.subtitle')}</p>
             </div>
           </div>
           
           {refreshSuccess ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-xs font-semibold animate-fade-in">
               <CheckCircle size={14} />
-              <span>Synced!</span>
+              <span>{t('prd.synced')}</span>
             </div>
           ) : (
             <button
@@ -276,12 +318,11 @@ Make.com Scheduler: Rp 144.000 / month
               className="btn-outline flex items-center gap-1.5 !px-3 !py-1.5 !text-xs cursor-pointer hover:bg-canvas transition-colors disabled:opacity-50"
             >
               <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
-              <span>{isRefreshing ? 'Syncing...' : 'Sync New Processes'}</span>
+              <span>{isRefreshing ? t('prd.syncing') : t('prd.syncNewProcesses')}</span>
             </button>
           )}
         </div>
 
-        {/* View togglers */}
         <div className="flex border-b border-line gap-4 pt-1 text-xs print:hidden">
           <button
             onClick={() => setActiveSubTab('prd')}
@@ -291,7 +332,7 @@ Make.com Scheduler: Rp 144.000 / month
           >
             <div className="flex items-center gap-1.5">
               <FileText size={14} />
-              <span>Engine Blueprints &amp; PRD</span>
+              <span>{t('prd.tab.prd')}</span>
             </div>
             {activeSubTab === 'prd' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-ink" />}
           </button>
@@ -303,7 +344,7 @@ Make.com Scheduler: Rp 144.000 / month
           >
             <div className="flex items-center gap-1.5">
               <Table size={14} />
-              <span>Standard Indonesia Price Sheet</span>
+              <span>{t('prd.tab.pricing')}</span>
             </div>
             {activeSubTab === 'pricing' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-ink" />}
           </button>
@@ -312,9 +353,8 @@ Make.com Scheduler: Rp 144.000 / month
 
       {activeSubTab === 'prd' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Sidebar Engines List */}
           <div className="lg:col-span-4 space-y-3 print:hidden">
-            <span className="text-[10px] font-bold text-mute tracking-wider uppercase px-1">Unified Architectures</span>
+            <span className="text-[10px] font-bold text-mute tracking-wider uppercase px-1">{t('prd.sidebarHeading')}</span>
             <div className="space-y-2">
               {engines.map((e) => {
                 const IconComp = e.icon;
@@ -335,8 +375,8 @@ Make.com Scheduler: Rp 144.000 / month
                       <IconComp size={15} />
                     </div>
                     <div className="space-y-0.5 min-w-0">
-                      <h4 className="text-xs font-bold truncate">{e.title}</h4>
-                      <p className={`text-[10px] line-clamp-1 ${isSelected ? 'text-mute' : 'text-faint'}`}>{e.description}</p>
+                      <h4 className="text-xs font-bold truncate">{engineTitle(t, e)}</h4>
+                      <p className={`text-[10px] line-clamp-1 ${isSelected ? 'text-mute' : 'text-faint'}`}>{engineDescription(t, e)}</p>
                     </div>
                   </button>
                 );
@@ -344,69 +384,63 @@ Make.com Scheduler: Rp 144.000 / month
             </div>
 
             <div className="p-4.5 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-2.5">
-              <span className="text-[10px] font-bold text-emerald-800 tracking-wider uppercase block">Overlap Analytics Summary</span>
-              <p className="text-[11px] text-emerald-900 leading-relaxed">
-                By grouping these <strong className="text-emerald-900">7 individual process mappings</strong> into <strong className="text-emerald-900">4 core backend automation engines</strong>, Siloam Finance Directorate avoids redundant software licenses, streamlines supervisor gate reviews, and achieves a unified, cohesive application ecosystem.
-              </p>
+              <span className="text-[10px] font-bold text-emerald-800 tracking-wider uppercase block">{t('prd.overlapSummaryTitle')}</span>
+              <p className="text-[11px] text-emerald-900 leading-relaxed">{t('prd.overlapSummaryBody')}</p>
             </div>
           </div>
 
-          {/* Engine PRD Details Sheet */}
           <div className="lg:col-span-8 bg-white border border-line rounded-3xl p-6 shadow-sm space-y-6 print:col-span-12 print:border-none print:shadow-none print:p-0">
             <div className="flex justify-between items-start gap-4 flex-wrap pb-4 border-b border-line">
               <div className="space-y-1">
-                <span className="chip bg-citron-soft border-transparent text-citron-deep">PRD (Product Requirement Documentation)</span>
-                <h3 className="font-display text-xl font-bold text-ink">{currentEngine.title}</h3>
-                <p className="text-xs text-mute">{currentEngine.description}</p>
+                <span className="chip bg-citron-soft border-transparent text-citron-deep">{t('prd.prdBadge')}</span>
+                <h3 className="font-display text-xl font-bold text-ink">{engineTitle(t, currentEngine)}</h3>
+                <p className="text-xs text-mute">{engineDescription(t, currentEngine)}</p>
               </div>
               <div className="flex items-center gap-2">
                 {isAdmin && (
                   <button
                     onClick={() => setDeletingEngine(currentEngine)}
                     className="btn-outline flex items-center gap-1.5 !text-xs !py-2 !px-4 shrink-0 cursor-pointer print:hidden text-rose-500 border-rose-200 hover:bg-rose-50 hover:border-rose-300"
-                    title="Erase Architecture"
+                    title={t('prd.eraseTitle')}
                   >
-                    <X size={13} /> Erase
+                    <X size={13} /> {t('prd.erase')}
                   </button>
                 )}
                 <button
                   onClick={() => handleExportPRD(currentEngine.id)}
                   className="btn-dark flex items-center gap-1.5 !text-xs !py-2 !px-4 shrink-0 cursor-pointer print:hidden"
                 >
-                  <Download size={13} /> Export PRD File
+                  <Download size={13} /> {t('prd.exportPrd')}
                 </button>
               </div>
             </div>
 
-            {/* Core Section: Target Audience */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:break-inside-avoid">
               <div className="border border-line/60 rounded-2xl p-4 space-y-1 bg-canvas-soft">
-                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Target Audience &amp; CFO Viewers</span>
+                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('prd.targetAudience')}</span>
                 <p className="text-xs font-semibold text-ink leading-tight">{currentEngine.targetAudience}</p>
               </div>
               <div className="border border-line/60 rounded-2xl p-4 space-y-1 bg-canvas-soft">
-                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Master Users / Executors</span>
+                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('prd.masterUsers')}</span>
                 <p className="text-xs font-semibold text-ink leading-tight">{currentEngine.masterUsers}</p>
               </div>
             </div>
 
-            {/* Connected Systems */}
             <div className="space-y-2 print:break-inside-avoid">
-              <span className="text-[10px] font-bold text-mute tracking-wider uppercase">Connected Application Ecosystem</span>
+              <span className="text-[10px] font-bold text-mute tracking-wider uppercase">{t('prd.ecosystemTitle')}</span>
               <div className="p-4 border border-line rounded-2xl bg-white flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 grid place-items-center shrink-0">
                   <Landmark size={15} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-ink leading-normal">{currentEngine.ecosystemApps}</p>
-                  <p className="text-[10px] text-faint mt-0.5">Fully mapped API schemas and user authentication flows.</p>
+                  <p className="text-[10px] text-faint mt-0.5">{t('prd.ecosystemSub')}</p>
                 </div>
               </div>
             </div>
 
-            {/* Overlapping processes */}
             <div className="space-y-2 print:break-inside-avoid">
-              <span className="text-[10px] font-bold text-mute tracking-wider uppercase">Consolidated Catalog Processes (Eliminating Redundancy)</span>
+              <span className="text-[10px] font-bold text-mute tracking-wider uppercase">{t('prd.overlappingProcesses')}</span>
               <div className="grid sm:grid-cols-2 gap-2.5">
                 {currentEngine.overlappingProcesses.map((p) => (
                   <div key={p} className="p-3 bg-canvas-soft border border-line/55 rounded-xl flex items-center gap-2">
@@ -417,24 +451,22 @@ Make.com Scheduler: Rp 144.000 / month
               </div>
             </div>
 
-            {/* Costing Logic */}
             <div className="space-y-3.5 pt-2 border-t border-line/60 print:break-inside-avoid">
-              <span className="text-[10px] font-bold text-mute tracking-wider uppercase block">Costing Logic per Engine</span>
+              <span className="text-[10px] font-bold text-mute tracking-wider uppercase block">{t('prd.costingLogic')}</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <span className="text-xs font-bold text-ink-soft block">CAPEX Logic (Development / Setup)</span>
+                  <span className="text-xs font-bold text-ink-soft block">{t('prd.capexLogic')}</span>
                   <p className="text-[11px] text-mute leading-relaxed">{currentEngine.capexLogic}</p>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-xs font-bold text-emerald-800 block">OPEX Logic (Ongoing / Subscriptions)</span>
+                  <span className="text-xs font-bold text-emerald-800 block">{t('prd.opexLogic')}</span>
                   <p className="text-[11px] text-mute leading-relaxed">{currentEngine.opexLogic}</p>
                 </div>
               </div>
             </div>
 
-            {/* Functional Specifications */}
             <div className="space-y-2.5 pt-2 border-t border-line/60 print:break-inside-avoid">
-              <span className="text-[10px] font-bold text-mute tracking-wider uppercase block">Functional Specifications</span>
+              <span className="text-[10px] font-bold text-mute tracking-wider uppercase block">{t('prd.functionalSpecs')}</span>
               <ul className="space-y-2 text-[11px] text-mute pl-1">
                 {currentEngine.specifications.map((spec, i) => (
                   <li key={i} className="flex gap-2">
@@ -445,34 +477,32 @@ Make.com Scheduler: Rp 144.000 / month
               </ul>
             </div>
 
-            {/* ROI targets */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 pt-4 border-t border-line bg-canvas-soft/40 -mx-6 -mb-6 p-6 rounded-b-3xl print:break-inside-avoid print:mx-0 print:mb-0 print:border-line print:rounded-2xl">
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Transactional Scale</span>
+                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('prd.metric.transactionalScale')}</span>
                 <span className="text-xs font-bold text-ink block leading-snug">{currentEngine.metrics.volume}</span>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Effort Released</span>
+                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('prd.metric.effortReleased')}</span>
                 <span className="text-xs font-bold text-ink block leading-snug">{currentEngine.metrics.effort}</span>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-emerald-800 font-bold block">Est. Annual Savings</span>
+                <span className="text-[9px] uppercase tracking-wider text-emerald-800 font-bold block">{t('prd.metric.annualSavings')}</span>
                 <span className="text-xs font-bold text-emerald-700 block leading-snug">{currentEngine.metrics.annualSavings}</span>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">Break-Even Period</span>
+                <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('prd.metric.breakEven')}</span>
                 <span className="text-xs font-bold text-ink block leading-snug">{currentEngine.metrics.payback}</span>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* Standard Indonesia Unit Price Sheet */
         <div className="bg-white border border-line rounded-3xl p-6 shadow-sm space-y-5 animate-fade-up">
           <div className="flex justify-between items-start gap-4 flex-wrap">
             <div>
-              <h3 className="font-display text-xl font-bold">Standard Indonesia Unit Price Sheet</h3>
-              <p className="text-xs text-mute mt-0.5">Grounding AI &amp; RPA costing logic in standard local vendor billing rates and Gemini token cost models (RAG Cost Basis).</p>
+              <h3 className="font-display text-xl font-bold">{t('prd.pricingTitle')}</h3>
+              <p className="text-xs text-mute mt-0.5">{t('prd.pricingSubtitle')}</p>
             </div>
           </div>
 
@@ -480,11 +510,11 @@ Make.com Scheduler: Rp 144.000 / month
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="bg-ink text-white border-b border-line">
-                  <th className="p-3.5 font-semibold">Nama Item Layanan</th>
-                  <th className="p-3.5 font-semibold">Kategori</th>
-                  <th className="p-3.5 font-semibold">Harga Satuan (IDR)</th>
-                  <th className="p-3.5 font-semibold">Satuan Pengukuran (UoM)</th>
-                  <th className="p-3.5 font-semibold">Fungsi &amp; Kegunaan Teknis</th>
+                  <th className="p-3.5 font-semibold">{t('prd.pricing.table.item')}</th>
+                  <th className="p-3.5 font-semibold">{t('prd.pricing.table.category')}</th>
+                  <th className="p-3.5 font-semibold">{t('prd.pricing.table.rate')}</th>
+                  <th className="p-3.5 font-semibold">{t('prd.pricing.table.unit')}</th>
+                  <th className="p-3.5 font-semibold">{t('prd.pricing.table.desc')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60 bg-white">
@@ -507,10 +537,8 @@ Make.com Scheduler: Rp 144.000 / month
           </div>
 
           <div className="p-4 bg-teal-50 border border-teal-100 rounded-2xl space-y-1 text-xs">
-            <span className="font-bold text-teal-800 block">Bagaimana Cara Kerja Costing Model Ini?</span>
-            <p className="text-teal-900 leading-relaxed">
-              Kami memisahkan beban Capex (satu kali pengerjaan pengembangan sistem / set up integration) dengan beban Opex (biaya berjalan bulanan). OPEX kami murni berbasis konsumsi (consumption-based) menggunakan API Key Server-Side. Untuk orkestrasi, Make.com bertindak sebagai integrator visual yang menghubungkan service account Anda.
-            </p>
+            <span className="font-bold text-teal-800 block">{t('prd.pricing.howItWorks')}</span>
+            <p className="text-teal-900 leading-relaxed">{t('prd.pricing.howItWorksBody')}</p>
           </div>
         </div>
       )}
@@ -521,27 +549,27 @@ Make.com Scheduler: Rp 144.000 / month
             <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 grid place-items-center mx-auto mb-2">
               <X size={24} />
             </div>
-            <h3 className="font-display font-semibold text-lg text-ink">Erase Architecture?</h3>
+            <h3 className="font-display font-semibold text-lg text-ink">{t('prd.delete.title')}</h3>
             <p className="text-sm text-mute">
-              Are you sure you want to completely delete the architecture <span className="font-semibold text-ink">&quot;{deletingEngine.title}&quot;</span>? This action cannot be undone.
+              {t('prd.delete.body', { title: engineTitle(t, deletingEngine) })}
             </p>
             <div className="flex justify-center gap-2 pt-4">
               <button
                 onClick={() => setDeletingEngine(null)}
                 className="px-4 py-2 rounded-xl text-sm font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer w-full"
               >
-                Cancel
+                {t('prd.delete.cancel')}
               </button>
               <button
                 onClick={() => {
                   const newEngines = engines.filter((e) => e.id !== deletingEngine.id);
                   setEngines(newEngines);
-                  if (newEngines.length > 0) setActiveEngine(newEngines[0].id);
+                  if (newEngines.length > 0) setActiveEngine(newEngines[0]!.id);
                   setDeletingEngine(null);
                 }}
                 className="px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer w-full"
               >
-                Yes, Delete
+                {t('prd.delete.confirm')}
               </button>
             </div>
           </div>

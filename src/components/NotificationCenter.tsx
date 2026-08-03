@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCheck, Inbox, MailOpen, Megaphone, Reply } from 'lucide-react';
 import { NotificationLog, Persona, UserNotification } from '../types';
 import { timeAgo } from '../lib/utils';
+import { useT } from '../lib/i18n';
 import { Avatar, EmptyState, AutoTextarea } from './ui';
 
 /** Inbox & broadcast history (US-11/12/22) — reminders, tags and admin chases land here. */
@@ -18,6 +19,7 @@ export default function NotificationCenter({
   onActionNotification: (id: string, response: string) => void;
   currentPersona: Persona;
 }) {
+  const t = useT();
   const [openId, setOpenId] = useState<string | null>(null);
   const [reply, setReply] = useState('');
   const showBroadcasts = currentPersona === 'Admin' || currentPersona === 'L1';
@@ -25,12 +27,12 @@ export default function NotificationCenter({
   return (
     <div className="animate-fade-up space-y-5">
       <div>
-        <h2 className="font-display text-xl font-semibold tracking-tight">Inbox</h2>
-        <p className="text-sm text-mute mt-0.5">Collaboration tags, completion chases and programme updates.</p>
+        <h2 className="font-display text-xl font-semibold tracking-tight">{t('notif.title')}</h2>
+        <p className="text-sm text-mute mt-0.5">{t('notif.subtitle')}</p>
       </div>
 
       {notifications.length === 0 ? (
-        <EmptyState icon={<Inbox size={22} />} title="All clear" body="Nothing needs your attention right now." />
+        <EmptyState icon={<Inbox size={22} />} title={t('notif.emptyTitle')} body={t('notif.emptyBody')} />
       ) : (
         <div className="card divide-y divide-line overflow-hidden">
           {notifications.map((notif) => {
@@ -51,14 +53,14 @@ export default function NotificationCenter({
                     <div className="text-[11px] text-faint truncate">{notif.senderName} · {timeAgo(notif.timestamp)}</div>
                   </div>
                   {notif.actionRequired && notif.status !== 'Actioned' && (
-                    <span className="chip bg-blush/70 border-transparent text-warn shrink-0">Action required</span>
+                    <span className="chip bg-blush/70 border-transparent text-warn shrink-0">{t('notif.actionRequired')}</span>
                   )}
                   {notif.status === 'Actioned' && (
                     <span className="chip bg-citron-soft border-transparent text-citron-deep shrink-0">
-                      <CheckCheck size={11} /> Actioned
+                      <CheckCheck size={11} /> {t('notif.actioned')}
                     </span>
                   )}
-                  {notif.status === 'Unread' && <span className="w-2 h-2 rounded-full bg-veil-deep shrink-0" aria-label="Unread" />}
+                  {notif.status === 'Unread' && <span className="w-2 h-2 rounded-full bg-veil-deep shrink-0" aria-label={t('notif.unread')} />}
                 </button>
 
                 {isOpen && (
@@ -66,7 +68,7 @@ export default function NotificationCenter({
                     <p className="text-sm text-inksoft leading-relaxed max-w-2xl whitespace-pre-wrap break-words h-auto">{notif.message}</p>
                     {notif.responseText && (
                       <div className="mt-3 text-xs bg-canvas rounded-xl px-3.5 py-2.5 max-w-2xl whitespace-pre-wrap break-words h-auto flex flex-col gap-1">
-                        <span className="font-semibold text-mute">Your response:</span>
+                        <span className="font-semibold text-mute">{t('notif.yourResponse')}</span>
                         <div className="text-ink">{notif.responseText}</div>
                       </div>
                     )}
@@ -74,7 +76,7 @@ export default function NotificationCenter({
                       <div className="mt-3.5 max-w-2xl">
                         <AutoTextarea
                           className="field !py-2.5 min-h-20 text-sm"
-                          placeholder="Respond with the requested detail or a status update…"
+                          placeholder={t('notif.replyPlaceholder')}
                           value={reply}
                           onChange={(e) => setReply(e.target.value)}
                         />
@@ -87,7 +89,7 @@ export default function NotificationCenter({
                               setReply('');
                             }}
                           >
-                            <Reply size={13} /> Send response
+                            <Reply size={13} /> {t('notif.sendResponse')}
                           </button>
                         </div>
                       </div>
@@ -103,9 +105,9 @@ export default function NotificationCenter({
       {showBroadcasts && (
         <div className="card p-6">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <Megaphone size={15} className="text-veil-deep" /> Broadcast history
+            <Megaphone size={15} className="text-veil-deep" /> {t('notif.broadcastTitle')}
           </h3>
-          <p className="text-xs text-mute mt-0.5">Targeted sends from the programme team, with response counts.</p>
+          <p className="text-xs text-mute mt-0.5">{t('notif.broadcastSub')}</p>
           <ul className="mt-4 space-y-3">
             {logs.map((log) => (
               <li key={log.id} className="rounded-2xl border border-line px-4 py-3.5">
@@ -113,14 +115,16 @@ export default function NotificationCenter({
                   <div className="text-sm font-semibold">{log.subject}</div>
                   <div className="flex items-center gap-2">
                     <span className="chip">
-                      {log.targetType === 'all' ? 'Everyone' : `${log.targetType}: ${log.targetValue}`}
+                      {log.targetType === 'all' ? t('notif.everyone') : `${log.targetType}: ${log.targetValue}`}
                     </span>
                     <span className="text-[11px] text-faint whitespace-nowrap">{timeAgo(log.timestamp)}</span>
                   </div>
                 </div>
                 <p className="text-xs text-mute mt-1.5 leading-relaxed max-w-2xl">{log.message}</p>
                 <div className="text-[11px] text-faint mt-2 flex items-center gap-1.5">
-                  <MailOpen size={11} /> {log.responsesCount ?? 0} response{(log.responsesCount ?? 0) === 1 ? '' : 's'} · sent by {log.senderName}
+                  <MailOpen size={11} />{' '}
+                  {t((log.responsesCount ?? 0) === 1 ? 'notif.responses' : 'notif.responsesPlural', { n: log.responsesCount ?? 0 })} ·{' '}
+                  {t('notif.sentBy', { name: log.senderName })}
                 </div>
               </li>
             ))}

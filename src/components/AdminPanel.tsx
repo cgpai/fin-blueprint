@@ -12,6 +12,7 @@ import { ImprovementItem, Process, SubFunction, SystemItem } from '../types';
 import { SUBFUNCTIONS_LIST } from '../data/mockData';
 import { isRemoteEnabled } from '../lib/blueprintApi';
 import { CHART_COLORS, classificationCounts } from '../lib/utils';
+import { useT } from '../lib/i18n';
 import { Meter, Stat, AutoTextarea } from './ui';
 import RemoteUserAdmin from './RemoteUserAdmin';
 
@@ -26,19 +27,28 @@ const TOOLTIP_STYLE = {
 
 const READINESS_THRESHOLD = 85;
 
+const SYSTEM_CATEGORIES = [
+  { value: 'Enterprise Resource Planning (Financial Core)', labelKey: 'admin.category.erp' },
+  { value: 'Procurement E-System', labelKey: 'admin.category.procurement' },
+  { value: 'Tax Compliance Portal', labelKey: 'admin.category.tax' },
+  { value: 'Clinical Data Layer', labelKey: 'admin.category.clinical' },
+  { value: 'Insurance / Reinsurance Portal', labelKey: 'admin.category.insurance' },
+  { value: 'Corporate Banking Platform', labelKey: 'admin.category.banking' },
+  { value: 'Analytics & Presentation Layer', labelKey: 'admin.category.analytics' },
+  { value: 'Custom System / Legacy App', labelKey: 'admin.category.legacy' },
+  { value: 'Other Productivity Tool', labelKey: 'admin.category.other' },
+] as const;
+
 const CustomYAxisTick = (props: any) => {
   const { x, y, payload } = props;
   const name = payload.value || '';
   
-  // Replace non-breaking spaces back to normal spaces for splitting, if any exist
   const cleanName = name.replace(/\u00A0/g, ' ');
   
-  // Split name into words
   const words = cleanName.split(' ');
   const lines: string[] = [];
   let currentLine = '';
   
-  // Simple wrapping logic: group words so that each line is at most 16 characters
   words.forEach((word: string) => {
     if (!currentLine) {
       currentLine = word;
@@ -55,7 +65,7 @@ const CustomYAxisTick = (props: any) => {
   
   const lineHeight = 12;
   const totalHeight = lines.length * lineHeight;
-  const startDy = -(totalHeight / 2) + lineHeight / 2 + 3; // +3 is for vertical alignment adjustment
+  const startDy = -(totalHeight / 2) + lineHeight / 2 + 3;
 
   return (
     <g transform={`translate(${x - 6}, ${y})`}>
@@ -79,6 +89,10 @@ const CustomYAxisTick = (props: any) => {
   );
 };
 
+function categoryLabel(t: ReturnType<typeof useT>, value: string) {
+  const found = SYSTEM_CATEGORIES.find((c) => c.value === value);
+  return found ? t(found.labelKey) : value;
+}
 
 /** Programme admin (US-21/22/23) — hackathon dataset, data quality, next-stage readiness, broadcasts. */
 export default function AdminPanel({
@@ -94,15 +108,15 @@ export default function AdminPanel({
   improvementItems: ImprovementItem[];
   onTriggerAdminNotification: (subject: string, msg: string, type: 'individual' | 'level' | 'subfunction' | 'all', val: string) => void;
 }) {
+  const t = useT();
   const [targetType, setTargetType] = useState<'individual' | 'level' | 'subfunction' | 'all'>('level');
   const [targetValue, setTargetValue] = useState('L4');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sentFlash, setSentFlash] = useState(false);
 
-  // System Configuration States
   const [systemSearchQuery, setSystemSearchQuery] = useState('');
-  const [editingSystemId, setEditingSystemId] = useState<string | null>(null); // 'new' or specific id
+  const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
   const [systemNameInput, setSystemNameInput] = useState('');
   const [systemCategoryInput, setSystemCategoryInput] = useState('Enterprise Resource Planning (Financial Core)');
   const [systemDescriptionInput, setSystemDescriptionInput] = useState('');
@@ -231,11 +245,17 @@ export default function AdminPanel({
   const chase = (proc: Process) => {
     setTargetType('individual');
     setTargetValue(proc.ownerEmail);
-    setSubject(`Please complete "${proc.title}" (${proc.completenessScore}% complete)`);
+    setSubject(t('admin.chase.subject', { title: proc.title, percent: proc.completenessScore }));
+    const gaps = proc.gaps.length
+      ? t('admin.chase.gapsPrefix', { gaps: proc.gaps.slice(0, 3).join(' ') })
+      : '';
     setMessage(
-      `Hi ${proc.ownerName.split(' ')[0]}, your process "${proc.title}" is at ${proc.completenessScore}% completeness. ` +
-        (proc.gaps.length ? `Open gaps: ${proc.gaps.slice(0, 3).join(' ')} ` : '') +
-        'Please add the missing detail so it can move to the next transformation stage.',
+      t('admin.chase.message', {
+        firstName: proc.ownerName.split(' ')[0]!,
+        title: proc.title,
+        percent: proc.completenessScore,
+        gaps,
+      }),
     );
     document.getElementById('admin-composer')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -252,48 +272,61 @@ export default function AdminPanel({
 
   const readinessPct = Math.round((avgCompleteness / READINESS_THRESHOLD) * 100);
 
+  const categorySelect = (id: string) => (
+    <select
+      id={id}
+      className="field cursor-pointer text-xs mt-1"
+      value={systemCategoryInput}
+      onChange={(e) => setSystemCategoryInput(e.target.value)}
+    >
+      {SYSTEM_CATEGORIES.map((cat) => (
+        <option key={cat.value} value={cat.value}>
+          {t(cat.labelKey)}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <div className="animate-fade-up space-y-5">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">Programme control room</h2>
-          <p className="text-sm text-mute mt-0.5">Data quality, the hackathon dataset and next-stage readiness — all in one place.</p>
+          <h2 className="font-display text-xl font-semibold tracking-tight">{t('admin.title')}</h2>
+          <p className="text-sm text-mute mt-0.5">{t('admin.subtitle')}</p>
         </div>
         <button className="btn-ghost" onClick={exportDataset}>
-          <Download size={15} /> Export dataset
+          <Download size={15} /> {t('admin.exportDataset')}
         </button>
       </div>
 
       {isRemoteEnabled() && <RemoteUserAdmin />}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="Processes captured" value={processes.length} hint={`${classifiedSteps} classified steps`} accent="citron" />
-        <Stat label="Dataset completeness" value={`${avgCompleteness}%`} hint={`threshold ${READINESS_THRESHOLD}% for next stage`} />
-        <Stat label="Ready for next stage" value={ready.length} hint="processes at threshold" accent="veil" />
-        <Stat label="Systems mapped" value={availableSystems.length} hint="in the master catalogue" />
+        <Stat label={t('admin.stat.processesCaptured')} value={processes.length} hint={t('admin.stat.classifiedSteps', { count: classifiedSteps })} accent="citron" />
+        <Stat label={t('admin.stat.datasetCompleteness')} value={`${avgCompleteness}%`} hint={t('admin.stat.thresholdHint', { threshold: READINESS_THRESHOLD })} />
+        <Stat label={t('admin.stat.readyNextStage')} value={ready.length} hint={t('admin.stat.processesAtThreshold')} accent="veil" />
+        <Stat label={t('admin.stat.systemsMapped')} value={availableSystems.length} hint={t('admin.stat.masterCatalogue')} />
       </div>
 
-      {/* Transformation readiness */}
       <div className="card bg-ink border-transparent text-white p-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <Rocket size={15} className="text-citron" /> Next-stage readiness · data clean-up &amp; agentic deployment
+            <Rocket size={15} className="text-citron" /> {t('admin.readinessTitle')}
           </h3>
-          <span className="text-xs text-white/60">{Math.min(100, readinessPct)}% of the way there</span>
+          <span className="text-xs text-white/60">{t('admin.readinessPct', { percent: Math.min(100, readinessPct) })}</span>
         </div>
         <div className="mt-4"><Meter value={Math.min(100, readinessPct)} /></div>
         <p className="text-xs text-white/60 mt-3 leading-relaxed max-w-2xl">
           {avgCompleteness >= READINESS_THRESHOLD
-            ? 'Threshold met — export the dataset and kick off the data clean-up stage with the ranked candidates below.'
-            : `Dataset completeness is ${avgCompleteness}%. Chase the low-completeness processes below to unlock the next stage at ${READINESS_THRESHOLD}%.`}
+            ? t('admin.readinessMet')
+            : t('admin.readinessBelow', { percent: avgCompleteness, threshold: READINESS_THRESHOLD })}
         </p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* Systems analytics */}
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-sm">Processes per system</h3>
-          <p className="text-xs text-mute mt-0.5 mb-4">Where the work actually happens</p>
+          <h3 className="font-display font-semibold text-sm">{t('admin.processesPerSystem')}</h3>
+          <p className="text-xs text-mute mt-0.5 mb-4">{t('admin.processesPerSystemSub')}</p>
           <ResponsiveContainer width="100%" height={210}>
             <BarChart data={systemsData} layout="vertical" margin={{ top: 0, right: 12, bottom: 0, left: 8 }}>
               <XAxis type="number" tick={{ fontSize: 10.5, fill: 'var(--color-mute)' }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -301,7 +334,10 @@ export default function AdminPanel({
               <Tooltip
                 cursor={{ fill: 'rgba(23,23,28,0.04)' }}
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(value: any) => [`${value} process${value === 1 ? '' : 'es'}`, 'Touches']}
+                formatter={(value: any) => [
+                  t(Number(value) === 1 ? 'admin.chart.process' : 'admin.chart.processes', { count: value }),
+                  t('admin.chart.touches'),
+                ]}
                 labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.full ?? ''}
               />
               <Bar dataKey="count" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} maxBarSize={18} />
@@ -309,15 +345,14 @@ export default function AdminPanel({
           </ResponsiveContainer>
         </div>
 
-        {/* Hackathon list */}
         <div className="card p-6">
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <Trophy size={15} className="text-citron-deep" /> Hackathon challenge list
+            <Trophy size={15} className="text-citron-deep" /> {t('admin.hackathonTitle')}
           </h3>
-          <p className="text-xs text-mute mt-0.5">Ranked by automation suitability — the most impactful AI interventions first.</p>
+          <p className="text-xs text-mute mt-0.5">{t('admin.hackathonSub')}</p>
           <ol className="mt-4 space-y-2.5">
             {hackathonList.length === 0 && (
-              <li className="text-sm text-faint py-6 text-center">Run AI refinement on captured processes to build the list.</li>
+              <li className="text-sm text-faint py-6 text-center">{t('admin.hackathonEmpty')}</li>
             )}
             {hackathonList.map((proc, i) => (
               <li key={proc.id} className="flex items-center gap-3 rounded-2xl border border-line px-4 py-3">
@@ -335,31 +370,27 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* System & Tool Configuration (AI Context Registry) */}
       <div className="card p-6 space-y-4">
         <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-line">
           <div>
             <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <Settings2 size={15} className="text-veil-deep" /> Systems &amp; Tools Registry
+              <Settings2 size={15} className="text-veil-deep" /> {t('admin.systemsRegistryTitle')}
             </h3>
-            <p className="text-xs text-mute mt-0.5">
-              Manage the employee tech stack context database. These descriptions feed directly into the AI engine to propose custom API integrations, agentic automation, and workflows.
-            </p>
+            <p className="text-xs text-mute mt-0.5">{t('admin.systemsRegistrySub')}</p>
           </div>
           <button
             onClick={handleStartAddSystem}
             className="btn-dark flex items-center gap-1.5 !py-1.5 !px-3.5 text-xs"
           >
-            <Plus size={13} /> Add New System
+            <Plus size={13} /> {t('admin.addNewSystem')}
           </button>
         </div>
 
-        {/* Add/Edit Inline Form (for adding new systems) */}
         {editingSystemId === 'new' && (
           <div className="bg-canvas border border-line rounded-2xl p-4 space-y-4 animate-fade-in">
             <div className="flex items-center justify-between pb-2 border-b border-line/60">
               <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
-                Add New System
+                {t('admin.addSystemHeading')}
               </h4>
               <button
                 onClick={handleCancelSystemEdit}
@@ -371,57 +402,36 @@ export default function AdminPanel({
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="label text-xs font-semibold" htmlFor="sys-name">System/Tool Name</label>
+                <label className="label text-xs font-semibold" htmlFor="sys-name">{t('admin.systemNameLabel')}</label>
                 <input
                   id="sys-name"
                   type="text"
                   className="field text-xs mt-1"
-                  placeholder="e.g. Workday HCM"
+                  placeholder={t('admin.systemNamePlaceholder')}
                   value={systemNameInput}
                   onChange={(e) => setSystemNameInput(e.target.value)}
                 />
               </div>
               <div>
-                <label className="label text-xs font-semibold" htmlFor="sys-cat">Classification Category</label>
-                <select
-                  id="sys-cat"
-                  className="field cursor-pointer text-xs mt-1"
-                  value={systemCategoryInput}
-                  onChange={(e) => setSystemCategoryInput(e.target.value)}
-                >
-                  <option value="Enterprise Resource Planning (Financial Core)">ERP (Financial Core)</option>
-                  <option value="Procurement E-System">Procurement E-System</option>
-                  <option value="Tax Compliance Portal">Tax Compliance Portal</option>
-                  <option value="Clinical Data Layer">Clinical Data Layer</option>
-                  <option value="Insurance / Reinsurance Portal">Insurance / Reinsurance Portal</option>
-                  <option value="Corporate Banking Platform">Corporate Banking Platform</option>
-                  <option value="Analytics & Presentation Layer">Analytics & Presentation Layer</option>
-                  <option value="Custom System / Legacy App">Custom System / Legacy App</option>
-                  <option value="Other Productivity Tool">Other Productivity Tool</option>
-                </select>
+                <label className="label text-xs font-semibold" htmlFor="sys-cat">{t('admin.categoryLabel')}</label>
+                {categorySelect('sys-cat')}
               </div>
             </div>
 
             <div>
-              <label className="label text-xs font-semibold" htmlFor="sys-desc">
-                AI Context &amp; Capabilities (API interfaces, bottlenecks, data flow parameters)
-              </label>
+              <label className="label text-xs font-semibold" htmlFor="sys-desc">{t('admin.aiContextLabel')}</label>
               <AutoTextarea
                 id="sys-desc"
                 className="field min-h-20 text-xs mt-1"
-                placeholder="Describe how this system operates, available API endpoints, manual bottlenecks, security restrictions, or how the AI should propose agentic and robotic solutions for it."
+                placeholder={t('admin.aiContextPlaceholder')}
                 value={systemDescriptionInput}
                 onChange={(e) => setSystemDescriptionInput(e.target.value)}
               />
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={handleCancelSystemEdit}
-                className="btn-ghost !py-2 !px-4 text-xs"
-              >
-                Cancel
+              <button type="button" onClick={handleCancelSystemEdit} className="btn-ghost !py-2 !px-4 text-xs">
+                {t('admin.cancel')}
               </button>
               <button
                 type="button"
@@ -429,41 +439,39 @@ export default function AdminPanel({
                 className="btn-dark !py-2 !px-4 text-xs flex items-center gap-1.5"
                 disabled={!systemNameInput.trim()}
               >
-                <Check size={14} /> Save System
+                <Check size={14} /> {t('admin.saveSystem')}
               </button>
             </div>
           </div>
         )}
 
-        {/* Search Filter */}
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
             type="text"
             className="field !pl-9 text-xs"
-            placeholder="Search systems, categories, or capabilities..."
+            placeholder={t('admin.searchSystemsPlaceholder')}
             value={systemSearchQuery}
             onChange={(e) => setSystemSearchQuery(e.target.value)}
           />
         </div>
 
-        {/* Systems List Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-line text-mute font-medium">
-                <th className="py-2.5 px-3">System Name</th>
-                <th className="py-2.5 px-3">Category</th>
-                <th className="py-2.5 px-3">AI Context &amp; Automation Hook</th>
-                <th className="py-2.5 px-3 text-center">Touch Count</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
+                <th className="py-2.5 px-3">{t('admin.table.systemName')}</th>
+                <th className="py-2.5 px-3">{t('admin.table.category')}</th>
+                <th className="py-2.5 px-3">{t('admin.table.aiContext')}</th>
+                <th className="py-2.5 px-3 text-center">{t('admin.table.touchCount')}</th>
+                <th className="py-2.5 px-3 text-right">{t('admin.table.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {filteredSystems.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-faint">
-                    No registered systems matched your search query.
+                    {t('admin.noSystemsMatch')}
                   </td>
                 </tr>
               ) : (
@@ -477,13 +485,13 @@ export default function AdminPanel({
                         <td className="py-3 px-3 font-medium text-ink">{sys.name}</td>
                         <td className="py-3 px-3">
                           <span className="chip bg-veil-soft border-transparent text-veil-deep whitespace-nowrap text-[10px]">
-                            {sys.category}
+                            {categoryLabel(t, sys.category)}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-mute max-w-xs truncate" title={sys.description || 'No specific AI context provided.'}>
+                        <td className="py-3 px-3 text-mute max-w-xs truncate" title={sys.description || t('admin.noAiContextTitle')}>
                           {sys.description || (
                             <span className="text-faint italic font-normal">
-                              No custom AI context defined. Proposing general integrations.
+                              {t('admin.noAiContextBody')}
                             </span>
                           )}
                         </td>
@@ -497,14 +505,14 @@ export default function AdminPanel({
                             <button
                               onClick={() => handleStartEditSystem(sys)}
                               className={`w-7 h-7 rounded-full hover:bg-veil flex items-center justify-center transition-colors cursor-pointer ${isBeingEdited ? 'bg-citron text-ink font-semibold' : 'text-mute hover:text-ink'}`}
-                              title="Edit system config"
+                              title={t('admin.editSystemTitle')}
                             >
                               <Edit2 size={12} />
                             </button>
                             <button
                               onClick={() => handleDeleteSystem(sys.id, sys.name)}
                               className={`w-7 h-7 rounded-full hover:bg-bad/10 flex items-center justify-center transition-colors cursor-pointer ${isBeingDeleted ? 'bg-bad text-white' : 'text-mute hover:text-bad'}`}
-                              title="Delete system"
+                              title={t('admin.deleteSystemTitle')}
                             >
                               <Trash2 size={12} />
                             </button>
@@ -517,69 +525,45 @@ export default function AdminPanel({
                             <div className="bg-canvas border border-line rounded-2xl p-4 space-y-4 shadow-sm">
                               <div className="flex items-center justify-between pb-2 border-b border-line/60">
                                 <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">
-                                  Edit "{sys.name}" Registry
+                                  {t('admin.editRegistryHeading', { name: sys.name })}
                                 </h4>
-                                <button
-                                  onClick={handleCancelSystemEdit}
-                                  className="text-mute hover:text-ink cursor-pointer"
-                                >
+                                <button onClick={handleCancelSystemEdit} className="text-mute hover:text-ink cursor-pointer">
                                   <X size={14} />
                                 </button>
                               </div>
 
                               <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
-                                  <label className="label text-xs font-semibold" htmlFor={`sys-name-${sys.id}`}>System/Tool Name</label>
+                                  <label className="label text-xs font-semibold" htmlFor={`sys-name-${sys.id}`}>{t('admin.systemNameLabel')}</label>
                                   <input
                                     id={`sys-name-${sys.id}`}
                                     type="text"
                                     className="field text-xs mt-1"
-                                    placeholder="e.g. Workday HCM"
+                                    placeholder={t('admin.systemNamePlaceholder')}
                                     value={systemNameInput}
                                     onChange={(e) => setSystemNameInput(e.target.value)}
                                   />
                                 </div>
                                 <div>
-                                  <label className="label text-xs font-semibold" htmlFor={`sys-cat-${sys.id}`}>Classification Category</label>
-                                  <select
-                                    id={`sys-cat-${sys.id}`}
-                                    className="field cursor-pointer text-xs mt-1"
-                                    value={systemCategoryInput}
-                                    onChange={(e) => setSystemCategoryInput(e.target.value)}
-                                  >
-                                    <option value="Enterprise Resource Planning (Financial Core)">ERP (Financial Core)</option>
-                                    <option value="Procurement E-System">Procurement E-System</option>
-                                    <option value="Tax Compliance Portal">Tax Compliance Portal</option>
-                                    <option value="Clinical Data Layer">Clinical Data Layer</option>
-                                    <option value="Insurance / Reinsurance Portal">Insurance / Reinsurance Portal</option>
-                                    <option value="Corporate Banking Platform">Corporate Banking Platform</option>
-                                    <option value="Analytics & Presentation Layer">Analytics & Presentation Layer</option>
-                                    <option value="Custom System / Legacy App">Custom System / Legacy App</option>
-                                    <option value="Other Productivity Tool">Other Productivity Tool</option>
-                                  </select>
+                                  <label className="label text-xs font-semibold" htmlFor={`sys-cat-${sys.id}`}>{t('admin.categoryLabel')}</label>
+                                  {categorySelect(`sys-cat-${sys.id}`)}
                                 </div>
                               </div>
 
                               <div>
-                                <label className="label text-xs font-semibold" htmlFor={`sys-desc-${sys.id}`}>
-                                  AI Context &amp; Capabilities (API interfaces, bottlenecks, data flow parameters)
-                                </label>
+                                <label className="label text-xs font-semibold" htmlFor={`sys-desc-${sys.id}`}>{t('admin.aiContextLabel')}</label>
                                 <AutoTextarea
                                   id={`sys-desc-${sys.id}`}
                                   className="field min-h-20 text-xs mt-1"
-                                  placeholder="Describe how this system operates, available API endpoints, manual bottlenecks, security restrictions, or how the AI should propose agentic and robotic solutions for it."
+                                  placeholder={t('admin.aiContextPlaceholder')}
                                   value={systemDescriptionInput}
                                   onChange={(e) => setSystemDescriptionInput(e.target.value)}
                                 />
                               </div>
 
                               <div className="flex items-center justify-end gap-2.5 pt-2">
-                                <button
-                                  type="button"
-                                  onClick={handleCancelSystemEdit}
-                                  className="btn-ghost !py-2 !px-4 text-xs"
-                                >
-                                  Cancel
+                                <button type="button" onClick={handleCancelSystemEdit} className="btn-ghost !py-2 !px-4 text-xs">
+                                  {t('admin.cancel')}
                                 </button>
                                 <button
                                   type="button"
@@ -587,7 +571,7 @@ export default function AdminPanel({
                                   className="btn-dark !py-2 !px-4 text-xs flex items-center gap-1.5"
                                   disabled={!systemNameInput.trim()}
                                 >
-                                  <Check size={14} /> Save System
+                                  <Check size={14} /> {t('admin.saveSystem')}
                                 </button>
                               </div>
                             </div>
@@ -601,26 +585,16 @@ export default function AdminPanel({
                               <div className="flex items-start gap-2.5">
                                 <HelpCircle size={16} className="text-bad mt-0.5" />
                                 <div>
-                                  <h4 className="font-semibold text-xs text-ink">Delete "{systemToDelete.name}" from registry?</h4>
-                                  <p className="text-[11px] text-mute mt-1">
-                                    Are you sure you want to delete this system? Deleting it will remove its specific AI capabilities descriptions, although existing step records referencing its name will remain untouched.
-                                  </p>
+                                  <h4 className="font-semibold text-xs text-ink">{t('admin.deleteSystemHeading', { name: systemToDelete.name })}</h4>
+                                  <p className="text-[11px] text-mute mt-1">{t('admin.deleteSystemBody')}</p>
                                 </div>
                               </div>
                               <div className="flex items-center justify-end gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setSystemToDelete(null)}
-                                  className="btn-ghost !py-1.5 !px-3.5 !text-[11px]"
-                                >
-                                  Cancel
+                                <button type="button" onClick={() => setSystemToDelete(null)} className="btn-ghost !py-1.5 !px-3.5 !text-[11px]">
+                                  {t('admin.cancel')}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={confirmDeleteSystem}
-                                  className="btn-dark !bg-bad hover:!bg-bad/90 !text-white !py-1.5 !px-3.5 !text-[11px]"
-                                >
-                                  Yes, Delete System
+                                <button type="button" onClick={confirmDeleteSystem} className="btn-dark !bg-bad hover:!bg-bad/90 !text-white !py-1.5 !px-3.5 !text-[11px]">
+                                  {t('admin.confirmDeleteSystem')}
                                 </button>
                               </div>
                             </div>
@@ -636,27 +610,28 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* Data quality */}
       <div className="card p-6">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <Database size={15} className="text-veil-deep" /> Data quality — completeness gaps
+          <Database size={15} className="text-veil-deep" /> {t('admin.dataQualityTitle')}
         </h3>
         {lowCompleteness.length === 0 ? (
-          <p className="text-sm text-faint mt-3">Every captured process is at or above the {READINESS_THRESHOLD}% threshold. 🎯</p>
+          <p className="text-sm text-faint mt-3">{t('admin.allAtThreshold', { threshold: READINESS_THRESHOLD })}</p>
         ) : (
           <ul className="mt-4 space-y-2.5">
             {lowCompleteness.map((proc) => (
               <li key={proc.id} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 flex-wrap">
                 <div className="flex-1 min-w-40">
                   <div className="text-sm font-medium truncate">{proc.title}</div>
-                  <div className="text-[11px] text-faint">{proc.ownerName} · {proc.gaps.length} open gap{proc.gaps.length === 1 ? '' : 's'}</div>
+                  <div className="text-[11px] text-faint">
+                    {proc.ownerName} · {t(proc.gaps.length === 1 ? 'admin.openGaps' : 'admin.openGapsPlural', { count: proc.gaps.length })}
+                  </div>
                 </div>
                 <div className="w-36 flex items-center gap-2">
                   <div className="flex-1"><Meter value={proc.completenessScore} /></div>
                   <span className="text-xs font-bold">{proc.completenessScore}%</span>
                 </div>
                 <button className="btn-ghost !py-1.5 !px-3.5 !text-[11px]" onClick={() => chase(proc)}>
-                  <Megaphone size={11} /> Chase owner
+                  <Megaphone size={11} /> {t('admin.chaseOwner')}
                 </button>
               </li>
             ))}
@@ -664,32 +639,31 @@ export default function AdminPanel({
         )}
       </div>
 
-      {/* Composer */}
       <div id="admin-composer" className="card p-6">
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-          <Send size={15} className="text-veil-deep" /> Notify by level, line-of-work or individual
+          <Send size={15} className="text-veil-deep" /> {t('admin.notifyTitle')}
         </h3>
         <div className="grid sm:grid-cols-2 gap-4 mt-4">
           <div>
-            <label className="label" htmlFor="adm-type">Audience</label>
+            <label className="label" htmlFor="adm-type">{t('admin.audience')}</label>
             <select
               id="adm-type"
               className="field cursor-pointer"
               value={targetType}
               onChange={(e) => {
-                const t = e.target.value as typeof targetType;
-                setTargetType(t);
-                setTargetValue(t === 'level' ? 'L4' : t === 'subfunction' ? SUBFUNCTIONS_LIST[0]! : '');
+                const next = e.target.value as typeof targetType;
+                setTargetType(next);
+                setTargetValue(next === 'level' ? 'L4' : next === 'subfunction' ? SUBFUNCTIONS_LIST[0]! : '');
               }}
             >
-              <option value="individual">Individual</option>
-              <option value="level">Level</option>
-              <option value="subfunction">Line of work</option>
-              <option value="all">Everyone</option>
+              <option value="individual">{t('admin.audience.individual')}</option>
+              <option value="level">{t('admin.audience.level')}</option>
+              <option value="subfunction">{t('admin.audience.subfunction')}</option>
+              <option value="all">{t('admin.audience.all')}</option>
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="adm-target">Target</label>
+            <label className="label" htmlFor="adm-target">{t('admin.target')}</label>
             {targetType === 'level' ? (
               <select id="adm-target" className="field cursor-pointer" value={targetValue} onChange={(e) => setTargetValue(e.target.value)}>
                 {['L1', 'L2', 'L3', 'L4'].map((l) => <option key={l} value={l}>{l}</option>)}
@@ -700,7 +674,7 @@ export default function AdminPanel({
               </select>
             ) : targetType === 'individual' ? (
               <>
-                <input id="adm-target" className="field" list="adm-emails" placeholder="person@company.com" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
+                <input id="adm-target" className="field" list="adm-emails" placeholder={t('admin.emailPlaceholder')} value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
                 <datalist id="adm-emails">
                   {[...new Set(processes.map((p) => p.ownerEmail).filter(Boolean))].map((email) => (
                     <option key={email} value={email} />
@@ -708,26 +682,26 @@ export default function AdminPanel({
                 </datalist>
               </>
             ) : (
-              <input className="field" value="All registered users" disabled />
+              <input className="field" value={t('admin.allRegisteredUsers')} disabled />
             )}
           </div>
         </div>
         <div className="mt-3.5">
-          <label className="label" htmlFor="adm-subject">Subject</label>
-          <input id="adm-subject" className="field" placeholder="e.g. Reminder: documentation deadline Friday" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          <label className="label" htmlFor="adm-subject">{t('admin.subject')}</label>
+          <input id="adm-subject" className="field" placeholder={t('admin.subjectPlaceholder')} value={subject} onChange={(e) => setSubject(e.target.value)} />
         </div>
         <div className="mt-3.5">
-          <label className="label" htmlFor="adm-msg">Message</label>
-          <AutoTextarea id="adm-msg" className="field min-h-24" placeholder="What do you need from them?" value={message} onChange={(e) => setMessage(e.target.value)} />
+          <label className="label" htmlFor="adm-msg">{t('admin.message')}</label>
+          <AutoTextarea id="adm-msg" className="field min-h-24" placeholder={t('admin.messagePlaceholder')} value={message} onChange={(e) => setMessage(e.target.value)} />
         </div>
         <div className="mt-4 flex items-center justify-end gap-3">
-          {sentFlash && <span className="text-xs font-semibold text-ok animate-fade-up">Sent — logged in broadcast history ✓</span>}
+          {sentFlash && <span className="text-xs font-semibold text-ok animate-fade-up">{t('admin.sentFlash')}</span>}
           <button
             className="btn-dark"
             onClick={send}
             disabled={!subject.trim() || !message.trim() || (targetType !== 'all' && !targetValue.trim())}
           >
-            <Send size={14} /> Send notification
+            <Send size={14} /> {t('admin.sendNotification')}
           </button>
         </div>
       </div>

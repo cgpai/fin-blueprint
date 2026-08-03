@@ -158,7 +158,7 @@ export default function Onboarding({
                       id="ob-email"
                       type="email"
                       className="field"
-                      placeholder="you@company.com"
+                      placeholder={t('landing.emailPlaceholder')}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && identityValid && setStep(2)}

@@ -20,6 +20,7 @@ import {
   UserNotification,
   NotificationLog
 } from '../types';
+import { useT } from '../lib/i18n';
 
 interface BackupData {
   version: string;
@@ -58,6 +59,7 @@ export default function LocalDataHub({
   }, mode: 'merge' | 'overwrite') => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<BackupData | null>(null);
@@ -91,7 +93,7 @@ export default function LocalDataHub({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError('Failed to generate export file.');
+      setError(t('datahub.errorExport'));
     }
   };
 
@@ -101,7 +103,7 @@ export default function LocalDataHub({
     setParsedData(null);
 
     if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
-      setError('Please select a valid JSON backup file.');
+      setError(t('datahub.errorInvalidJson'));
       return;
     }
 
@@ -113,7 +115,7 @@ export default function LocalDataHub({
 
         // Basic structural validation
         if (!json || typeof json !== 'object') {
-          setError('Invalid backup file: Format is not a valid JSON object.');
+          setError(t('datahub.errorNotObject'));
           return;
         }
 
@@ -121,13 +123,13 @@ export default function LocalDataHub({
         const hasSystems = Array.isArray(json.systems);
 
         if (!hasProcesses && !hasSystems && !json.profile) {
-          setError('This JSON does not appear to contain Blueprint platform data (no processes or systems found).');
+          setError(t('datahub.errorNotBlueprint'));
           return;
         }
 
         setParsedData(json);
       } catch (err) {
-        setError('Failed to parse JSON file. Ensure the file is not corrupted.');
+        setError(t('datahub.errorParse'));
       }
     };
     reader.readAsText(file);
@@ -177,7 +179,7 @@ export default function LocalDataHub({
       adminBroadcastLogs: parsedData.adminBroadcastLogs,
     }, mode);
 
-    setSuccessMsg(`Successfully ${mode === 'merge' ? 'merged' : 'restored'} local data!`);
+    setSuccessMsg(mode === 'merge' ? t('datahub.successMerge') : t('datahub.successRestore'));
     setTimeout(() => {
       onClose();
     }, 1500);
@@ -199,14 +201,14 @@ export default function LocalDataHub({
               <ArrowLeftRight size={18} />
             </span>
             <div>
-              <h2 className="font-display font-semibold text-lg leading-tight">Local Data Transfer</h2>
-              <p className="text-xs text-mute mt-0.5">Import, export, and feed local data to another disk</p>
+              <h2 className="font-display font-semibold text-lg leading-tight">{t('datahub.title')}</h2>
+              <p className="text-xs text-mute mt-0.5">{t('datahub.subtitle')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full grid place-items-center hover:bg-veil text-mute hover:text-ink transition-colors cursor-pointer"
-            aria-label="Close"
+            aria-label={t('datahub.close')}
           >
             <X size={16} />
           </button>
@@ -220,7 +222,7 @@ export default function LocalDataHub({
                 <CheckCircle2 size={36} />
               </span>
               <h3 className="font-display font-semibold text-lg">{successMsg}</h3>
-              <p className="text-xs text-mute max-w-xs">Updating workspace database state...</p>
+              <p className="text-xs text-mute max-w-xs">{t('datahub.updatingDb')}</p>
             </div>
           ) : (
             <>
@@ -231,17 +233,17 @@ export default function LocalDataHub({
                   <div>
                     <div className="flex items-center gap-2 mb-2 text-ink font-semibold text-sm">
                       <Download size={16} className="text-mute" />
-                      <span>Export Data Bundle</span>
+                      <span>{t('datahub.exportTitle')}</span>
                     </div>
                     <p className="text-xs text-mute leading-relaxed">
-                      Backup and download your entire local profile, documented processes, custom systems, and AI classifications as a single portable JSON file.
+                      {t('datahub.exportBody')}
                     </p>
                   </div>
                   <button
                     onClick={handleExport}
                     className="btn-dark w-full mt-5 text-xs flex items-center justify-center gap-2"
                   >
-                    <Download size={14} /> Download Backup (.json)
+                    <Download size={14} /> {t('datahub.downloadBackup')}
                   </button>
                 </div>
 
@@ -250,22 +252,22 @@ export default function LocalDataHub({
                   <div>
                     <div className="flex items-center gap-2 mb-2 text-ink font-semibold text-sm">
                       <Database size={16} className="text-citron-deep" />
-                      <span>Front-End Storage</span>
+                      <span>{t('datahub.storageTitle')}</span>
                     </div>
                     <p className="text-xs text-mute leading-relaxed">
-                      Blueprint operates with privacy-first local storage. By exporting your data, you can import it on another computer or browser tab to resume exactly where you left off.
+                      {t('datahub.storageBody')}
                     </p>
                   </div>
                   <div className="text-[10px] text-faint border-t border-line/60 pt-3 mt-3 flex items-center gap-1.5 font-mono">
                     <CheckCircle2 size={11} className="text-ok shrink-0" />
-                    <span>No cloud accounts or servers needed</span>
+                    <span>{t('datahub.noCloud')}</span>
                   </div>
                 </div>
               </div>
 
               {/* Import Section */}
               <div className="space-y-3">
-                <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">Import Data Bundle</h4>
+                <h4 className="font-semibold text-xs text-ink uppercase tracking-wider">{t('datahub.importTitle')}</h4>
                 
                 {/* Drag and Drop Area */}
                 <div
@@ -302,10 +304,10 @@ export default function LocalDataHub({
 
                   <div>
                     <p className="text-xs font-semibold text-ink">
-                      {parsedData ? 'Selected backup package loaded!' : 'Drag and drop your .json backup file here'}
+                      {parsedData ? t('datahub.dropLoaded') : t('datahub.dropPrompt')}
                     </p>
                     <p className="text-[11px] text-mute mt-1">
-                      {parsedData ? 'Review summary below before proceeding' : 'or click to browse your local disk'}
+                      {parsedData ? t('datahub.dropReview') : t('datahub.dropBrowse')}
                     </p>
                   </div>
                 </div>
@@ -332,39 +334,39 @@ export default function LocalDataHub({
                       className="border border-line rounded-2xl overflow-hidden"
                     >
                       <div className="bg-canvas-soft/60 px-4 py-3 border-b border-line text-xs font-semibold text-ink flex items-center justify-between">
-                        <span>Backup File Overview</span>
+                        <span>{t('datahub.overviewTitle')}</span>
                         <span className="text-[10px] font-normal text-mute">
-                          Generated: {new Date(parsedData.timestamp).toLocaleString()}
+                          {t('datahub.generated', { time: new Date(parsedData.timestamp).toLocaleString() })}
                         </span>
                       </div>
 
                       <div className="p-4 grid grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1.5">
-                          <div className="text-mute">Profile Holder</div>
+                          <div className="text-mute">{t('datahub.profileHolder')}</div>
                           <div className="font-semibold text-ink">
-                            {parsedData.profile?.name || 'Anonymous User'} 
+                            {parsedData.profile?.name || t('datahub.anonymousUser')} 
                             <span className="ml-1.5 chip py-0.5 px-1.5 text-[10px]">{parsedData.profile?.role || 'L4'}</span>
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="text-mute">Processes Packaged</div>
+                          <div className="text-mute">{t('datahub.processesPackaged')}</div>
                           <div className="font-semibold text-ink flex items-center gap-1.5">
                             <span className="text-sm font-bold">{parsedData.processes?.length || 0}</span>
-                            <span className="text-[10px] text-faint">documented workflows</span>
+                            <span className="text-[10px] text-faint">{t('datahub.documentedWorkflows')}</span>
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="text-mute">Systems Tracker</div>
+                          <div className="text-mute">{t('datahub.systemsTracker')}</div>
                           <div className="font-semibold text-ink flex items-center gap-1.5">
                             <span className="text-sm font-bold">{parsedData.systems?.length || 0}</span>
-                            <span className="text-[10px] text-faint">referenced applications</span>
+                            <span className="text-[10px] text-faint">{t('datahub.referencedApps')}</span>
                           </div>
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="text-mute">Backup Version</div>
+                          <div className="text-mute">{t('datahub.backupVersion')}</div>
                           <div className="font-semibold text-ink">
                             v{parsedData.version || '1.0'}
                           </div>
@@ -375,7 +377,7 @@ export default function LocalDataHub({
                         <div className="flex items-start gap-2 text-[11px] text-citron-deep leading-relaxed">
                           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                           <span>
-                            How do you want to apply this backup bundle? Merging is safe and won't overwrite existing unique processes. Overwriting performs a complete factory restore.
+                            {t('datahub.applyHint')}
                           </span>
                         </div>
 
@@ -384,17 +386,17 @@ export default function LocalDataHub({
                             onClick={() => applyImport('merge')}
                             className="btn-dark text-xs flex items-center justify-center gap-2 py-3"
                           >
-                            <Plus size={14} /> Merge with current data
+                            <Plus size={14} /> {t('datahub.merge')}
                           </button>
                           <button
                             onClick={() => {
-                              if (confirm('Warning: This will wipe your current local browser data for this app and replace it with the backup content. Continue?')) {
+                              if (confirm(t('datahub.overwriteConfirm'))) {
                                 applyImport('overwrite');
                               }
                             }}
                             className="btn-ghost !border-bad text-bad hover:bg-bad/5 text-xs flex items-center justify-center gap-2 py-3"
                           >
-                            <RefreshCw size={13} /> Restore & Wipe current
+                            <RefreshCw size={13} /> {t('datahub.restoreWipe')}
                           </button>
                         </div>
                       </div>

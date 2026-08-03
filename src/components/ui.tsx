@@ -1,5 +1,13 @@
 import { ReactNode, useEffect, useRef, TextareaHTMLAttributes } from 'react';
+import { classLabel, useLocale, useT } from '../lib/i18n';
 import { CLASSIFICATION_META, initials } from '../lib/utils';
+
+const STATUS_I18N: Record<'Draft' | 'Submitted' | 'Refined' | 'Approved', string> = {
+  Draft: 'ui.status.draft',
+  Submitted: 'ui.status.submitted',
+  Refined: 'ui.status.refined',
+  Approved: 'ui.status.approved',
+};
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return <div className="text-xs font-semibold text-mute mb-1">{children}</div>;
@@ -12,24 +20,27 @@ export function ClassChip({
   classification: 'agentic-ai' | 'automation' | 'human-in-the-loop';
   overridden?: boolean;
 }) {
+  const { locale } = useLocale();
+  const t = useT();
   const meta = CLASSIFICATION_META[classification];
   return (
-    <span className={`chip border-transparent ${meta.bg} ${meta.fg}`} title={overridden ? 'Manually overridden' : undefined}>
+    <span className={`chip border-transparent ${meta.bg} ${meta.fg}`} title={overridden ? t('ui.class.overriddenTitle') : undefined}>
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.dot }} />
-      {meta.label}
-      {overridden && <span className="opacity-70">· edited</span>}
+      {classLabel(locale, classification)}
+      {overridden && <span className="opacity-70">{t('ui.class.edited')}</span>}
     </span>
   );
 }
 
 export function StatusChip({ status }: { status: 'Draft' | 'Submitted' | 'Refined' | 'Approved' }) {
+  const t = useT();
   const styles: Record<string, string> = {
     Draft: 'bg-canvas text-mute',
     Submitted: 'bg-veil-soft text-veil-deep',
     Refined: 'bg-citron-soft text-citron-deep',
     Approved: 'bg-citron text-ink',
   };
-  return <span className={`chip border-transparent ${styles[status]}`}>{status}</span>;
+  return <span className={`chip border-transparent ${styles[status]}`}>{t(STATUS_I18N[status])}</span>;
 }
 
 export function Meter({ value, tone = 'citron' }: { value: number; tone?: 'citron' | 'veil' | 'ink' }) {
@@ -98,8 +109,9 @@ export function EmptyState({
 }
 
 export function ProgressDots({ total, current }: { total: number; current: number }) {
+  const t = useT();
   return (
-    <div className="flex items-center gap-2" aria-label={`Step ${current + 1} of ${total}`}>
+    <div className="flex items-center gap-2" aria-label={t('ui.progressStep', { current: current + 1, total })}>
       {Array.from({ length: total }).map((_, i) => (
         <span
           key={i}
@@ -116,6 +128,7 @@ export function ProgressDots({ total, current }: { total: number; current: numbe
 }
 
 export function TagList({ items, onRemove }: { items: string[]; onRemove?: (item: string) => void }) {
+  const t = useT();
   if (items.length === 0) return <span className="text-xs text-faint">—</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -127,7 +140,7 @@ export function TagList({ items, onRemove }: { items: string[]; onRemove?: (item
               type="button"
               onClick={() => onRemove(item)}
               className="text-faint hover:text-bad cursor-pointer leading-none"
-              aria-label={`Remove ${item}`}
+              aria-label={t('ui.tagRemove', { item })}
             >
               ×
             </button>

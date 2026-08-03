@@ -30,6 +30,24 @@ export default function DashboardManager({
     return t('dash.mgr.notStarted');
   };
 
+  const processCountLabel = (n: number) =>
+    t(n === 1 ? 'dash.mgr.processCount.one' : 'dash.mgr.processCount.other', { n });
+
+  const solutionLabel = (solution: ImprovementItem['recommendedSolution']) => {
+    if (solution === 'Automation') return t('dash.mgr.solutionAutomation');
+    if (solution === 'Agentic AI') return t('dash.mgr.solutionAgentic');
+    return t('dash.mgr.solutionSimplification');
+  };
+
+  const improvementStatusLabel = (status: ImprovementItem['status']) => {
+    if (status === 'Identified') return t('dash.mgr.statusIdentified');
+    if (status === 'In Progress') return t('dash.mgr.statusInProgress');
+    return t('dash.mgr.statusResolved');
+  };
+
+  const recommendSolution = (proc: Process): ImprovementItem['recommendedSolution'] =>
+    (proc.automationSuitability ?? 0) >= 80 ? 'Automation' : (proc.effortRating ?? 0) >= 4 ? 'Agentic AI' : 'Simplification';
+
   // Roster from real process owners — no hardcoded user list.
   const rosterMap = new Map<string, { name: string; email: string; owned: Process[] }>();
   for (const p of processes) {
@@ -57,8 +75,7 @@ export default function DashboardManager({
   const tracked = new Set(improvementItems.map((i) => i.processId));
 
   const acceptRecommendation = (proc: Process) => {
-    const solution: ImprovementItem['recommendedSolution'] =
-      (proc.automationSuitability ?? 0) >= 80 ? 'Automation' : (proc.effortRating ?? 0) >= 4 ? 'Agentic AI' : 'Simplification';
+    const solution = recommendSolution(proc);
     onAddImprovementItem({
       id: uid('imp'),
       processId: proc.id,
@@ -67,7 +84,12 @@ export default function DashboardManager({
       recommendedSolution: solution,
       status: 'Identified',
       ownerName: proc.ownerName,
-      expectedImpact: `Reduce manual effort in "${proc.title}" via ${solution.toLowerCase()} — drivers: volume ${proc.volumeRating ?? '?'}/5, repetitiveness ${proc.repetitivenessRating ?? '?'}/5.`,
+      expectedImpact: t('dash.mgr.impactTemplate', {
+        title: proc.title,
+        solution: solutionLabel(solution).toLowerCase(),
+        volume: proc.volumeRating ?? '?',
+        repetitiveness: proc.repetitivenessRating ?? '?',
+      }),
     });
   };
 
@@ -96,7 +118,7 @@ export default function DashboardManager({
                 <Avatar name={user.name} size={32} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{user.name}</div>
-                  <div className="text-[11px] text-faint truncate">{user.email || t('dash.mgr.noEmail')} · {owned.length} process{owned.length === 1 ? '' : 'es'}</div>
+                  <div className="text-[11px] text-faint truncate">{user.email || t('dash.mgr.noEmail')} · {processCountLabel(owned.length)}</div>
                 </div>
                 <span
                   className={`chip border-transparent ${
@@ -114,8 +136,10 @@ export default function DashboardManager({
                     onClick={() => {
                       onTriggerReminder(
                         user.email,
-                        'Reminder: complete your process documentation',
-                        `Hi ${user.name.split(' ')[0]}, your documentation is ${status === 'Not started' ? 'not started yet' : 'still missing detail'} — please complete it so the team analysis can run.`,
+                        t('dash.mgr.remindSubject'),
+                        status === 'Not started'
+                          ? t('dash.mgr.remindBodyNotStarted', { name: user.name.split(' ')[0]! })
+                          : t('dash.mgr.remindBodyInProgress', { name: user.name.split(' ')[0]! }),
                       );
                       setRemindedEmails((prev) => [...prev, user.email]);
                     }}
@@ -133,25 +157,29 @@ export default function DashboardManager({
           <h3 className="font-display font-semibold text-sm flex items-center gap-2">
             <Flame size={15} className="text-warn" /> {t('dash.mgr.highTitle')}
           </h3>
-          <p className="text-xs text-mute mt-0.5">Flagged by effort and automation suitability — accept a recommendation to track it.</p>
+          <p className="text-xs text-mute mt-0.5">{t('dash.mgr.highSub')}</p>
           <ul className="mt-4 space-y-3">
             {highEffort.length === 0 && (
-              <li className="text-sm text-faint py-6 text-center">Nothing flagged yet — run AI refinement on your team&rsquo;s processes.</li>
+              <li className="text-sm text-faint py-6 text-center">{t('dash.mgr.highEmpty')}</li>
             )}
             {highEffort.map((proc) => (
               <li key={proc.id} className="rounded-2xl border border-line p-4 print:break-inside-avoid">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold truncate">{proc.title}</div>
-                    <div className="text-[11px] text-faint mt-0.5">{proc.ownerName} · effort {proc.effortRating ?? '—'}/5</div>
+                    <div className="text-[11px] text-faint mt-0.5">
+                      {proc.ownerName} · {t('dash.mgr.effortRating', { n: proc.effortRating ?? '—' })}
+                    </div>
                   </div>
                   {proc.automationSuitability != null && (
-                    <span className="chip bg-veil-soft border-transparent text-veil-deep shrink-0">{proc.automationSuitability} suitability</span>
+                    <span className="chip bg-veil-soft border-transparent text-veil-deep shrink-0">
+                      {t('dash.mgr.suitability', { n: proc.automationSuitability })}
+                    </span>
                   )}
                 </div>
                 <div className="mt-2.5 flex items-center justify-between gap-3">
                   <span className="text-[11px] text-mute">
-                    Recommended: <strong>{(proc.automationSuitability ?? 0) >= 80 ? 'Automation' : 'Agentic AI'}</strong>
+                    {t('dash.mgr.recommended')} <strong>{solutionLabel(recommendSolution(proc))}</strong>
                   </span>
                   {tracked.has(proc.id) ? (
                     <span className="text-[11px] font-semibold text-ok">{t('dash.mgr.tracked')} ✓</span>
@@ -176,12 +204,12 @@ export default function DashboardManager({
           <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left text-[11px] text-mute">
-                <th className="pb-2.5 font-semibold">Process</th>
-                <th className="pb-2.5 font-semibold">Solution</th>
-                <th className="pb-2.5 font-semibold">Owner</th>
-                <th className="pb-2.5 font-semibold w-44">Expected impact</th>
-                <th className="pb-2.5 font-semibold">Status</th>
-                <th className="pb-2.5 font-semibold">Savings</th>
+                <th className="pb-2.5 font-semibold">{t('dash.mgr.colProcess')}</th>
+                <th className="pb-2.5 font-semibold">{t('dash.mgr.colSolution')}</th>
+                <th className="pb-2.5 font-semibold">{t('dash.mgr.colOwner')}</th>
+                <th className="pb-2.5 font-semibold w-44">{t('dash.mgr.colImpact')}</th>
+                <th className="pb-2.5 font-semibold">{t('dash.mgr.colStatus')}</th>
+                <th className="pb-2.5 font-semibold">{t('dash.mgr.colSavings')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -193,7 +221,7 @@ export default function DashboardManager({
                     <td className="py-3 pr-3 font-medium max-w-56"><span className="line-clamp-1">{item.processTitle}</span></td>
                     <td className="py-3 pr-3">
                       <span className={`chip border-transparent ${solutionTone ? `${solutionTone.bg} ${solutionTone.fg}` : 'bg-canvas'}`}>
-                        {item.recommendedSolution}
+                        {solutionLabel(item.recommendedSolution)}
                       </span>
                     </td>
                     <td className="py-3 pr-3 text-mute whitespace-nowrap">{item.ownerName}</td>
@@ -205,7 +233,7 @@ export default function DashboardManager({
                         onChange={(e) => onUpdateImprovementItem({ ...item, status: e.target.value as ImprovementItem['status'] })}
                       >
                         {STATUS_FLOW.map((s) => (
-                          <option key={s} value={s}>{s}</option>
+                          <option key={s} value={s}>{improvementStatusLabel(s)}</option>
                         ))}
                       </select>
                     </td>
@@ -221,7 +249,10 @@ export default function DashboardManager({
             <Meter value={improvementItems.length ? (improvementItems.filter((i) => i.status === 'Resolved').length / improvementItems.length) * 100 : 0} />
           </div>
           <span className="text-xs text-mute font-semibold whitespace-nowrap">
-            {improvementItems.filter((i) => i.status === 'Resolved').length} of {improvementItems.length} resolved
+            {t('dash.mgr.resolvedCount', {
+              resolved: improvementItems.filter((i) => i.status === 'Resolved').length,
+              total: improvementItems.length,
+            })}
           </span>
         </div>
       </div>

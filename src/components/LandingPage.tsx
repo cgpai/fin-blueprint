@@ -150,7 +150,7 @@ export default function LandingPage({
                   className="field"
                   type="email"
                   autoFocus
-                  placeholder="you@company.com"
+                  placeholder={t('landing.emailPlaceholder')}
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);

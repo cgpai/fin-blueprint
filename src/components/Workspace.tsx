@@ -278,7 +278,7 @@ export default function Workspace({
                 onSelectProcess={setSelectedViewProcess}
                 onEditProcess={handleEditProcess}
                 onDeleteProcess={(id) => {
-                  if (confirm('Permanently remove this process from the catalogue?')) {
+                  if (confirm(t('ws.deleteConfirm'))) {
                     onDeleteProcess(id);
                     if (selectedViewProcess?.id === id) setSelectedViewProcess(null);
                   }

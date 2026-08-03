@@ -87,6 +87,9 @@ export default function DashboardCFO({
     : 0;
   const resolvedImprovements = improvementItems.filter((i) => i.status === 'Resolved').length;
 
+  const chartProcessLabel = (n: number) =>
+    t(n === 1 ? 'dash.cfo.chartProcess.one' : 'dash.cfo.chartProcess.other', { n });
+
   const recent = [...processes]
     .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
     .slice(0, 5);
@@ -131,7 +134,7 @@ export default function DashboardCFO({
               <Tooltip
                 cursor={{ fill: 'rgba(23,23,28,0.04)' }}
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(value: any) => [`${value} process${value === 1 ? '' : 'es'}`, 'Documented']}
+                formatter={(value: any) => [chartProcessLabel(Number(value)), t('dash.cfo.chartDocumented')]}
                 labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.full ?? ''}
               />
               <Bar dataKey="processes" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} maxBarSize={34} />
@@ -145,7 +148,7 @@ export default function DashboardCFO({
           <p className="text-xs text-mute mt-0.5 mb-1">{t('dash.cfo.mixSub')}</p>
           {totalClassified === 0 ? (
             <div className="h-52 grid place-items-center text-sm text-faint text-center px-6">
-              Run AI refinement on a process to see the agentic / automation / human split.
+              {t('dash.cfo.mixEmpty')}
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -156,7 +159,7 @@ export default function DashboardCFO({
                       <Cell key={d.id} fill={CHART_COLORS[d.id]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: any, name: any) => [`${value} steps`, name]} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: any, name: any) => [t('dash.cfo.chartSteps', { n: value }), name]} />
                 </PieChart>
               </ResponsiveContainer>
               <ul className="space-y-2.5 flex-1">
@@ -212,7 +215,9 @@ export default function DashboardCFO({
                   <Avatar name={champ.name} size={28} />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{champ.name}</div>
-                    <div className="text-[11px] text-faint">{champ.count} processes · {champ.avg}% avg detail</div>
+                    <div className="text-[11px] text-faint">
+                      {t('dash.cfo.championDetail', { count: champ.count, avg: champ.avg })}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -229,7 +234,7 @@ export default function DashboardCFO({
                   onClick={onNavigateToProject}
                   className="text-[11px] font-semibold text-citron hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  Manage <ArrowRight size={12} />
+                  {t('dash.cfo.manage')} <ArrowRight size={12} />
                 </button>
               )}
             </div>
@@ -250,9 +255,9 @@ export default function DashboardCFO({
                         }
                         className="bg-black/50 text-[10px] font-bold text-citron border border-white/20 rounded px-1.5 py-0.5 cursor-pointer hover:border-citron transition-colors"
                       >
-                        <option value="4: Locked Project" className="bg-ink text-white">4: Locked</option>
-                        <option value="5: Tracked Execution" className="bg-ink text-white">5: Executing</option>
-                        <option value="6: Realised Benefit" className="bg-ink text-white">6: Realised</option>
+                        <option value="4: Locked Project" className="bg-ink text-white">{t('dash.cfo.stageLocked')}</option>
+                        <option value="5: Tracked Execution" className="bg-ink text-white">{t('dash.cfo.stageExecuting')}</option>
+                        <option value="6: Realised Benefit" className="bg-ink text-white">{t('dash.cfo.stageRealised')}</option>
                       </select>
                     </div>
 
@@ -288,7 +293,7 @@ export default function DashboardCFO({
             </div>
 
             <p className="text-[11px] text-white/50 pt-2 border-t border-white/10">
-              Stages 4–6 · Connected directly to active Locked Projects &amp; execution tracker.
+              {t('dash.cfo.planFooter')}
             </p>
           </div>
         </div>
