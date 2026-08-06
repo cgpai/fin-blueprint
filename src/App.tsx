@@ -51,8 +51,27 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
+function isNicoleUser(p: Pick<UserProfile, 'name' | 'email'>): boolean {
+  const n = p.name.toLowerCase();
+  const e = (p.email || '').toLowerCase();
+  return n.includes('nicole') || e.includes('nicole');
+}
+
+/** Nicole is always Admin — matches onboarding auto-promotion. */
+function withNicoleAdmin(p: UserProfile): UserProfile {
+  if (isNicoleUser(p) && p.role !== 'Admin') {
+    const updated = { ...p, role: 'Admin' as Persona };
+    localStorage.setItem(STORAGE.profile, JSON.stringify(updated));
+    return updated;
+  }
+  return p;
+}
+
 export default function App() {
-  const [profile, setProfile] = useState<UserProfile | null>(() => loadJSON<UserProfile | null>(STORAGE.profile, null));
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
+    return loaded ? withNicoleAdmin(loaded) : null;
+  });
 
   const [phase, setPhase] = useState<AppPhase>(() => {
     if (isRemoteEnabled()) {
@@ -77,9 +96,11 @@ export default function App() {
   });
   const [focusProcessId, setFocusProcessId] = useState<string | null>(null);
 
-  const [currentPersona, setCurrentPersona] = useState<Persona>(
-    () => loadJSON<UserProfile | null>(STORAGE.profile, null)?.role ?? 'L4',
-  );
+  const [currentPersona, setCurrentPersona] = useState<Persona>(() => {
+    const loaded = loadJSON<UserProfile | null>(STORAGE.profile, null);
+    if (loaded && isNicoleUser(loaded)) return 'Admin';
+    return loaded?.role ?? 'L4';
+  });
 
   // ---------- Data layer (local-first; empty seeds — no hardcoded people) ----------
   const [processes, setProcesses] = useState<Process[]>(() => loadJSON(STORAGE.processes, [] as Process[]));
@@ -220,15 +241,16 @@ export default function App() {
   };
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
-    localStorage.setItem(STORAGE.profile, JSON.stringify(newProfile));
+    const promoted = withNicoleAdmin(newProfile);
+    localStorage.setItem(STORAGE.profile, JSON.stringify(promoted));
     sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(newProfile);
+    setProfile(promoted);
     setRegisteredProfiles((prev) => {
-      const key = (newProfile.email || newProfile.name).trim().toLowerCase();
-      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), newProfile];
+      const key = (promoted.email || promoted.name).trim().toLowerCase();
+      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), promoted];
     });
-    setCurrentPersona(newProfile.role);
-    if (newProfile.role === 'Admin') {
+    setCurrentPersona(promoted.role);
+    if (promoted.role === 'Admin') {
       setWorkspaceTab('admin');
       setPhase('workspace');
     } else {
@@ -237,11 +259,12 @@ export default function App() {
   };
 
   const handleLandingLogin = (loggedIn: UserProfile) => {
-    localStorage.setItem(STORAGE.profile, JSON.stringify(loggedIn));
+    const promoted = withNicoleAdmin(loggedIn);
+    localStorage.setItem(STORAGE.profile, JSON.stringify(promoted));
     sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(loggedIn);
-    setCurrentPersona(loggedIn.role);
-    if (loggedIn.role === 'Admin') {
+    setProfile(promoted);
+    setCurrentPersona(promoted.role);
+    if (promoted.role === 'Admin') {
       setWorkspaceTab('admin');
       setPhase('workspace');
     } else {

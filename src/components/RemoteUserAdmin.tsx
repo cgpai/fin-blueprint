@@ -106,7 +106,7 @@ export default function RemoteUserAdmin() {
         <p className="text-xs text-mute mt-0.5">
           {t('remoteAdmin.createSub')}
         </p>
-        <div className="grid sm:grid-cols-2 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
           <input className="field" placeholder={t('common.fullName')} value={name} onChange={(e) => setName(e.target.value)} />
           <input className="field" placeholder={t('common.workEmail')} value={email} onChange={(e) => setEmail(e.target.value)} />
           <select className="field" value={level} onChange={(e) => setLevel(e.target.value as Persona)}>

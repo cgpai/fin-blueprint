@@ -240,7 +240,7 @@ function ProcessEditor({
 
               {isOpen && (
                 <div className="px-4 pb-5 pt-1 border-t border-line animate-fade-up">
-                  <div className="grid sm:grid-cols-[1fr_220px] gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_220px] gap-4 mt-4">
                     <div>
                       <label className="label">{t('review.stepName')}</label>
                       <input className="field !py-2" value={step.name} onChange={(e) => updateStep(step.id, { name: e.target.value })} placeholder={t('review.stepNamePlaceholder')} />
@@ -271,7 +271,7 @@ function ProcessEditor({
                       {step.aiRationale}
                     </div>
                   )}
-                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
                     <AttributeEditor label={t('review.inputs')} values={step.inputs} placeholder={t('review.inputPlaceholder')} onChange={(v) => updateStep(step.id, { inputs: v })} addLabel={t('review.addLabel', { label: t('review.inputs') })} />
                     <AttributeEditor label={t('review.outputs')} values={step.outputs} placeholder={t('review.outputPlaceholder')} onChange={(v) => updateStep(step.id, { outputs: v })} addLabel={t('review.addLabel', { label: t('review.outputs') })} />
                     <AttributeEditor label={t('review.decisionPoints')} values={step.decisionPoints} placeholder={t('review.decisionPlaceholder')} onChange={(v) => updateStep(step.id, { decisionPoints: v })} addLabel={t('review.addLabel', { label: t('review.decisionPoints') })} />

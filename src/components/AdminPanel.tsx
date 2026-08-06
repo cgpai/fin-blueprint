@@ -301,7 +301,7 @@ export default function AdminPanel({
 
       {isRemoteEnabled() && <RemoteUserAdmin />}
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label={t('admin.stat.processesCaptured')} value={processes.length} hint={t('admin.stat.classifiedSteps', { count: classifiedSteps })} accent="citron" />
         <Stat label={t('admin.stat.datasetCompleteness')} value={`${avgCompleteness}%`} hint={t('admin.stat.thresholdHint', { threshold: READINESS_THRESHOLD })} />
         <Stat label={t('admin.stat.readyNextStage')} value={ready.length} hint={t('admin.stat.processesAtThreshold')} accent="veil" />
@@ -323,7 +323,7 @@ export default function AdminPanel({
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-6">
           <h3 className="font-display font-semibold text-sm">{t('admin.processesPerSystem')}</h3>
           <p className="text-xs text-mute mt-0.5 mb-4">{t('admin.processesPerSystemSub')}</p>
@@ -400,7 +400,7 @@ export default function AdminPanel({
               </button>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="label text-xs font-semibold" htmlFor="sys-name">{t('admin.systemNameLabel')}</label>
                 <input
@@ -532,7 +532,7 @@ export default function AdminPanel({
                                 </button>
                               </div>
 
-                              <div className="grid sm:grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                   <label className="label text-xs font-semibold" htmlFor={`sys-name-${sys.id}`}>{t('admin.systemNameLabel')}</label>
                                   <input
@@ -643,7 +643,7 @@ export default function AdminPanel({
         <h3 className="font-display font-semibold text-sm flex items-center gap-2">
           <Send size={15} className="text-veil-deep" /> {t('admin.notifyTitle')}
         </h3>
-        <div className="grid sm:grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="label" htmlFor="adm-type">{t('admin.audience')}</label>
             <select

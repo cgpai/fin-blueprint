@@ -115,14 +115,14 @@ export default function DashboardCFO({
       </div>
 
       {/* Stat tiles */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 print:break-inside-avoid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:break-inside-avoid">
         <Stat label={t('dash.cfo.statProcesses')} value={processes.length} hint={t('dash.cfo.statProcessesHint')} accent="citron" />
         <Stat label={t('dash.cfo.statComplete')} value={`${avgCompleteness}%`} hint={t('dash.cfo.statCompleteHint')} />
         <Stat label={t('dash.cfo.statAuto')} value={automationCandidates} hint={t('dash.cfo.statAutoHint')} accent="veil" />
         <Stat label={t('dash.cfo.statImp')} value={`${resolvedImprovements}/${improvementItems.length}`} hint={t('dash.cfo.statImpHint')} />
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Coverage by subfunction */}
         <div className="card p-6 lg:col-span-3 print:break-inside-avoid">
           <h3 className="font-display font-semibold text-sm">{t('dash.cfo.coverage')}</h3>
@@ -185,36 +185,36 @@ export default function DashboardCFO({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-4">
-        {/* Recent processes */}
-        <div className="card p-6 lg:col-span-3 print:break-inside-avoid">
-          <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-            <TrendingUp size={15} className="text-veil-deep" /> {t('dash.cfo.recent')}
-          </h3>
-          <ul className="mt-4 divide-y divide-line">
-            {recent.map((proc) => (
-              <li key={proc.id}>
-                <button
-                  onClick={() => onSelectProcess(proc)}
-                  className="w-full text-left py-3 flex items-center gap-3 group cursor-pointer print:cursor-default"
-                >
-                  <Avatar name={proc.ownerName} size={30} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate group-hover:text-veil-deep transition-colors">{proc.title}</div>
-                    <div className="text-[11px] text-faint">{proc.ownerName} · {timeAgo(proc.lastUpdated)}</div>
-                  </div>
-                  <StatusChip status={proc.status} />
-                  <ArrowUpRight size={14} className="text-faint group-hover:text-ink transition-colors shrink-0 print:hidden" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          {/* Recent processes */}
+          <div className="card p-6 lg:col-span-3 print:break-inside-avoid">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <TrendingUp size={15} className="text-veil-deep" /> {t('dash.cfo.recent')}
+            </h3>
+            <ul className="mt-4 divide-y divide-line">
+              {recent.map((proc) => (
+                <li key={proc.id}>
+                  <button
+                    onClick={() => onSelectProcess(proc)}
+                    className="w-full text-left py-3 flex items-center gap-3 group cursor-pointer print:cursor-default"
+                  >
+                    <Avatar name={proc.ownerName} size={30} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate group-hover:text-veil-deep transition-colors">{proc.title}</div>
+                      <div className="text-[11px] text-faint">{proc.ownerName} · {timeAgo(proc.lastUpdated)}</div>
+                    </div>
+                    <StatusChip status={proc.status} />
+                    <ArrowUpRight size={14} className="text-faint group-hover:text-ink transition-colors shrink-0 print:hidden" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        {/* Champions (L2+) or RICE summary (L1) + transformation plan */}
-        <div className="space-y-4 lg:col-span-2">
+          {/* RICE (L1) or champions (L2+) */}
           {currentPersona === 'L1' ? (
-            <div className="card p-6 print:break-inside-avoid">
+            <div className="card p-6 lg:col-span-2 print:break-inside-avoid">
               <h3 className="font-display font-semibold text-sm flex items-center gap-2">
                 <Target size={15} className="text-citron-deep" /> {t('dash.cfo.riceSummary')}
               </h3>
@@ -248,7 +248,7 @@ export default function DashboardCFO({
               )}
             </div>
           ) : (
-            <div className="card p-6 print:break-inside-avoid">
+            <div className="card p-6 lg:col-span-2 print:break-inside-avoid">
               <h3 className="font-display font-semibold text-sm flex items-center gap-2">
                 <Award size={15} className="text-citron-deep" /> {t('dash.cfo.champions')}
               </h3>
@@ -268,79 +268,101 @@ export default function DashboardCFO({
               </ul>
             </div>
           )}
+        </div>
 
-          <div className="card bg-ink border-transparent p-6 text-white print:break-inside-avoid space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-                <Route size={15} className="text-citron" /> {t('dash.cfo.plan')}
-              </h3>
-              {onNavigateToProject && (
-                <button
-                  onClick={onNavigateToProject}
-                  className="text-[11px] font-semibold text-citron hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  {t('dash.cfo.manage')} <ArrowRight size={12} />
-                </button>
-              )}
-            </div>
+        {/* Transformation plan */}
+        <div className="card bg-ink border-transparent p-6 text-white print:break-inside-avoid space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <Route size={15} className="text-citron" /> {t('dash.cfo.plan')}
+            </h3>
+            {onNavigateToProject && (
+              <button
+                onClick={onNavigateToProject}
+                className="text-[11px] font-semibold text-citron hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                {t('dash.cfo.manage')} <ArrowRight size={12} />
+              </button>
+            )}
+          </div>
 
-            <div className="space-y-3">
-              {managedProjects.length > 0 ? (
-                managedProjects.slice(0, 4).map((proj) => (
-                  <div key={proj.id} className="p-3 rounded-xl bg-white/10 border border-white/10 space-y-2">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold truncate text-white/90">{proj.title}</span>
-                      <select
-                        value={proj.stage}
-                        onChange={(e) =>
-                          onUpdateProject?.({
-                            ...proj,
-                            stage: e.target.value as ProjectStage,
-                          })
-                        }
-                        className="bg-black/50 text-[10px] font-bold text-citron border border-white/20 rounded px-1.5 py-0.5 cursor-pointer hover:border-citron transition-colors"
-                      >
-                        <option value="4: Locked Project" className="bg-ink text-white">{t('dash.cfo.stageLocked')}</option>
-                        <option value="5: Tracked Execution" className="bg-ink text-white">{t('dash.cfo.stageExecuting')}</option>
-                        <option value="6: Realised Benefit" className="bg-ink text-white">{t('dash.cfo.stageRealised')}</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-[10px] text-white/60">
-                        <span>{proj.stage.split(':')[1]?.trim()}</span>
-                        <span className="font-bold text-white/90">{proj.progressPercent}%</span>
-                      </div>
-                      <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-citron h-full rounded-full transition-all duration-300"
-                          style={{ width: `${proj.progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
+          <div className="space-y-3">
+            {managedProjects.length > 0 ? (
+              managedProjects.slice(0, 4).map((proj) => (
+                <div key={proj.id} className="p-4 rounded-xl bg-white/10 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold truncate text-white/90">{proj.title}</span>
+                    <select
+                      value={proj.stage}
+                      onChange={(e) =>
+                        onUpdateProject?.({
+                          ...proj,
+                          stage: e.target.value as ProjectStage,
+                        })
+                      }
+                      className="bg-black/50 text-[10px] font-bold text-citron border border-white/20 rounded px-1.5 py-0.5 cursor-pointer hover:border-citron transition-colors"
+                    >
+                      <option value="4: Locked Project" className="bg-ink text-white">{t('dash.cfo.stageLocked')}</option>
+                      <option value="5: Tracked Execution" className="bg-ink text-white">{t('dash.cfo.stageExecuting')}</option>
+                      <option value="6: Realised Benefit" className="bg-ink text-white">{t('dash.cfo.stageRealised')}</option>
+                    </select>
                   </div>
-                ))
-              ) : (
-                improvementItems.slice(0, 3).map((item) => (
-                  <div key={item.id}>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate text-white/85">{item.processTitle}</span>
-                      <span className={`chip border-transparent !text-[10px] ${item.status === 'Resolved' ? 'bg-citron text-ink' : item.status === 'In Progress' ? 'bg-veil text-ink' : 'bg-white/15 text-white'}`}>
-                        {item.status}
+
+                  <div className="text-[10px] text-white/70 space-y-1.5 bg-black/20 p-2.5 rounded-lg">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-1.5 mb-1.5">
+                      <span>{t('dash.cfo.projectContact')}</span>
+                      <a href={`mailto:${proj.ownerEmail}`} className="text-white hover:text-citron transition-colors font-medium flex items-center gap-1">
+                        {proj.ownerName}
+                      </a>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>{t('dash.cfo.timeEffort')}</span>
+                      <span className="text-white font-medium">
+                        {proj.rice ? `${proj.rice.effort} wks · ${proj.rice.confidence}% conf.` : t('dash.cfo.timeEffortFallback')}
                       </span>
                     </div>
-                    <div className="mt-1.5">
-                      <Meter value={item.status === 'Resolved' ? 100 : item.status === 'In Progress' ? 55 : 15} />
+                    <div className="flex justify-between items-center">
+                      <span>{t('dash.cfo.financialImpact')}</span>
+                      <span className="text-emerald-400 font-medium">
+                        {proj.rice ? formatRiceImpact(proj.rice) : t('dash.cfo.financialImpactFallback')}
+                      </span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
 
-            <p className="text-[11px] text-white/50 pt-2 border-t border-white/10">
-              {t('dash.cfo.planFooter')}
-            </p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px] text-white/60">
+                      <span>{proj.stage.split(':')[1]?.trim()}</span>
+                      <span className="font-bold text-white/90">{proj.progressPercent}%</span>
+                    </div>
+                    <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-citron h-full rounded-full transition-all duration-300"
+                        style={{ width: `${proj.progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              improvementItems.slice(0, 3).map((item) => (
+                <div key={item.id}>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-white/85">{item.processTitle}</span>
+                    <span className={`chip border-transparent !text-[10px] ${item.status === 'Resolved' ? 'bg-citron text-ink' : item.status === 'In Progress' ? 'bg-veil text-ink' : 'bg-white/15 text-white'}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-1.5">
+                    <Meter value={item.status === 'Resolved' ? 100 : item.status === 'In Progress' ? 55 : 15} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          <p className="text-[11px] text-white/50 pt-2 border-t border-white/10">
+            {t('dash.cfo.planFooter')}
+          </p>
         </div>
       </div>
     </div>
