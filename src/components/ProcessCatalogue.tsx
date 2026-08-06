@@ -79,6 +79,7 @@ function ProcessDetail({
   const [errorPlan, setErrorPlan] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<number[]>([0]); // first phase open by default
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const [manualHoursOverride, setManualHoursOverride] = useState<number | null>(null);
 
   // USD to IDR conversion (Rp 16.000 per USD)
   const toIDR = (usd: number) => usd * 16000;
@@ -86,13 +87,53 @@ function ProcessDetail({
     return 'Rp ' + Math.round(val).toLocaleString('id-ID');
   };
 
-  const isRoadmapSaved = !!(proc.savedDeploymentPlan && plan && JSON.stringify(proc.savedDeploymentPlan) === JSON.stringify(plan));
+  const baselineCB = plan?.costBenefitAnalysis;
+  const baselineManualHours = baselineCB?.manualHoursReducedPerMonth || 85;
+  const effectiveManualHours = manualHoursOverride ?? baselineManualHours;
+  const isManualHoursEdited = manualHoursOverride !== null && manualHoursOverride !== baselineManualHours;
+
+  const derivedCB = useMemo(() => {
+    if (!baselineCB) return null;
+    const baseSavingsUSD = baselineCB.estimatedAnnualSavingsUSD || 32000;
+    const baseOpexUSD = baselineCB.annualSubscriptionCostUSD || 2400;
+    const devCostUSD = baselineCB.developmentCostUSD || 6000;
+    const ratio = baselineManualHours > 0 ? effectiveManualHours / baselineManualHours : 1;
+
+    const estimatedAnnualSavingsUSD = Math.max(0, Math.round(baseSavingsUSD * ratio));
+    const variableShare = 0.65;
+    const annualSubscriptionCostUSD = Math.max(0, Math.round(baseOpexUSD * (1 - variableShare) + baseOpexUSD * variableShare * ratio));
+
+    const netAnnualBenefit = estimatedAnnualSavingsUSD - annualSubscriptionCostUSD;
+    const totalAnnualCost = devCostUSD + annualSubscriptionCostUSD;
+    const roiPercent = totalAnnualCost > 0 ? Math.round((netAnnualBenefit / totalAnnualCost) * 100) : 0;
+    const paybackPeriodMonths =
+      netAnnualBenefit > 0
+        ? Math.max(0.5, Math.round((devCostUSD / (netAnnualBenefit / 12)) * 10) / 10)
+        : baselineCB.paybackPeriodMonths || 3;
+
+    return {
+      ...baselineCB,
+      manualHoursReducedPerMonth: effectiveManualHours,
+      estimatedAnnualSavingsUSD,
+      annualSubscriptionCostUSD,
+      roiPercent,
+      paybackPeriodMonths,
+    };
+  }, [baselineCB, baselineManualHours, effectiveManualHours]);
+
+  const effectivePlan: DeploymentPlan | null = plan && derivedCB ? { ...plan, costBenefitAnalysis: derivedCB } : plan;
+
+  const isRoadmapSaved = !!(
+    proc.savedDeploymentPlan &&
+    effectivePlan &&
+    JSON.stringify(proc.savedDeploymentPlan) === JSON.stringify(effectivePlan)
+  );
 
   const handleSaveRoadmap = () => {
-    if (plan && onSaveProcess) {
+    if (effectivePlan && onSaveProcess) {
       onSaveProcess({
         ...proc,
-        savedDeploymentPlan: plan,
+        savedDeploymentPlan: effectivePlan,
       });
     }
   };
@@ -485,11 +526,18 @@ function ProcessDetail({
 
             {/* Value, Cost & Benefit Dashboard */}
             <div className="space-y-3">
-              <div className="flex items-center gap-1.5">
-                <TrendingUp size={14} className="text-citron-deep" />
-                <h4 className="font-display font-semibold text-xs text-ink uppercase tracking-wider">
-                  {t('catalogue.vcbAnalysis')}
-                </h4>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp size={14} className="text-citron-deep" />
+                  <h4 className="font-display font-semibold text-xs text-ink uppercase tracking-wider">
+                    {t('catalogue.vcbAnalysis')}
+                  </h4>
+                </div>
+                {isManualHoursEdited && (
+                  <span className="chip bg-citron-soft border-citron/40 text-citron-deep text-[10px] font-bold">
+                    {t('catalogue.recalculatedEffort')}
+                  </span>
+                )}
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -497,11 +545,11 @@ function ProcessDetail({
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
                   <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.roiLabel')}</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-ink">+{plan.costBenefitAnalysis?.roiPercent || 380}%</span>
+                    <span className="text-lg font-bold text-ink">{(derivedCB?.roiPercent ?? 380) >= 0 ? '+' : ''}{derivedCB?.roiPercent ?? 380}%</span>
                     <span className="text-[10px] text-emerald-600 font-semibold">{t('catalogue.roiBadge')}</span>
                   </div>
                   <div className="text-[10px] text-faint">
-                    {t('catalogue.paybackMonths', { months: plan.costBenefitAnalysis?.paybackPeriodMonths || 3 })}
+                    {t('catalogue.paybackMonths', { months: derivedCB?.paybackPeriodMonths ?? 3 })}
                   </div>
                 </div>
 
@@ -509,18 +557,41 @@ function ProcessDetail({
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
                   <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.estAnnualSavings')}</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-base font-bold text-ink">{formatIDR(toIDR(plan.costBenefitAnalysis?.estimatedAnnualSavingsUSD || 32000))}</span>
+                    <span className="text-base font-bold text-ink">{formatIDR(toIDR(derivedCB?.estimatedAnnualSavingsUSD ?? 32000))}</span>
                   </div>
                   <div className="text-[10px] text-faint">
                     {t('catalogue.laborErrorReduction')}
                   </div>
                 </div>
 
-                {/* Labor Saved Card */}
-                <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
-                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.manualEffortReleased')}</span>
+                {/* Labor Saved Card — editable */}
+                <div className="bg-white border-2 border-citron/50 rounded-2xl p-3.5 space-y-1.5 shadow-sm">
+                  <span className="text-[9px] uppercase tracking-wider text-mute font-bold flex items-center justify-between gap-1">
+                    {t('catalogue.manualEffortReleased')}
+                    {isManualHoursEdited && (
+                      <button
+                        type="button"
+                        onClick={() => setManualHoursOverride(null)}
+                        className="normal-case font-bold text-citron-deep hover:underline cursor-pointer"
+                        title={t('catalogue.resetEffortBaseline')}
+                      >
+                        {t('common.reset')}
+                      </button>
+                    )}
+                  </span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-ink">{plan.costBenefitAnalysis?.manualHoursReducedPerMonth || 85}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={effectiveManualHours}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.round(Number(e.target.value) || 0));
+                        setManualHoursOverride(val === baselineManualHours ? null : val);
+                      }}
+                      className="w-16 text-lg font-bold text-ink bg-transparent border-0 border-b-2 border-dashed border-line focus:border-citron-deep outline-none cursor-text"
+                      title={t('catalogue.editEffortHint')}
+                    />
                     <span className="text-[10px] text-mute">{t('catalogue.hoursPerMonth')}</span>
                   </div>
                   <div className="text-[10px] text-faint">
@@ -532,10 +603,10 @@ function ProcessDetail({
                 <div className="bg-white border border-line rounded-2xl p-3.5 space-y-1.5 shadow-sm">
                   <span className="text-[9px] uppercase tracking-wider text-mute font-bold block">{t('catalogue.annualToolingOpex')}</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-base font-bold text-ink">{formatIDR(toIDR(plan.costBenefitAnalysis?.annualSubscriptionCostUSD || 2400))}</span>
+                    <span className="text-base font-bold text-ink">{formatIDR(toIDR(derivedCB?.annualSubscriptionCostUSD ?? 2400))}</span>
                   </div>
                   <div className="text-[10px] text-faint leading-tight mt-0.5">
-                    {t('catalogue.excludesDevCost', { amount: formatIDR(toIDR(plan.costBenefitAnalysis?.developmentCostUSD || 6000)) })}
+                    {t('catalogue.excludesDevCost', { amount: formatIDR(toIDR(derivedCB?.developmentCostUSD ?? 6000)) })}
                   </div>
                 </div>
               </div>

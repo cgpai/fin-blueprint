@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Briefcase,
   Users,
@@ -15,6 +16,7 @@ import {
   Bell,
   Clock,
   ArrowRight,
+  ArrowLeft,
   Info,
   Check,
   ChevronRight,
@@ -27,6 +29,7 @@ import {
   Sliders,
   Filter,
   FolderKanban,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   ManagedProject,
@@ -41,8 +44,29 @@ import {
   Process,
 } from '../types';
 import { Avatar } from './ui';
-import { uid, timeAgo } from '../lib/utils';
 import { useT } from '../lib/i18n';
+import { uid, timeAgo } from '../lib/utils';
+
+/**
+ * Renders modal overlays into document.body via a portal. This is required
+ * because the page content sits inside an `.animate-fade-up` ancestor —
+ * CSS animations that touch `transform` (even a resting `translateY(0)`)
+ * establish a new containing block for `position: fixed` descendants, so a
+ * plain in-tree `fixed inset-0` overlay would center against that ancestor's
+ * box instead of the viewport, landing near the top-left of the page instead
+ * of dead-center. Portaling to <body> sidesteps that entirely.
+ */
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+type ProjectSectionId = 'team' | 'transcripts' | 'assistant' | 'timeline' | 'okr';
 
 export default function ProjectManagement({
   projects,
@@ -100,28 +124,14 @@ export default function ProjectManagement({
   onNavigateToCatalogue?: (processId?: string) => void;
 }) {
   const t = useT();
+  // Gallery / detail navigation — landing page is a gallery of project cards;
+  // selecting one opens the detail view. `null` = show the gallery.
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [galleryScope, setGalleryScope] = useState<'mine' | 'all'>('mine');
+  // Which categorized section is showing in the detail view (right-side nav),
+  // so the whole page doesn't have to be scrolled to reach a section.
+  const [activeSection, setActiveSection] = useState<ProjectSectionId>('team');
 
-  const getStageBadgeLabel = (stage: ProjectStage) => {
-    switch (stage) {
-      case '4: Locked Project': return t('pm.stage4Badge');
-      case '5: Tracked Execution': return t('pm.stage5Badge');
-      case '6: Realised Benefit': return t('pm.stage6Badge');
-      default: return stage;
-    }
-  };
-
-  const getRoleLabel = (role: 'Lead' | 'Contributor' | 'Stakeholder') => {
-    switch (role) {
-      case 'Lead': return t('pm.role.lead');
-      case 'Contributor': return t('pm.role.contributor');
-      case 'Stakeholder': return t('pm.role.stakeholder');
-    }
-  };
-
-  const getActionStatusLabel = (status: 'pending' | 'sent' | 'acknowledged') => t(`pm.actionStatus.${status}`);
-
-  const [activeProjectId, setActiveProjectId] = useState<string>(projects[0]?.id || '');
-  
   // Modals & form state
   const [showAddPersonModal, setShowAddPersonModal] = useState(false);
   const [newPersonName, setNewPersonName] = useState('');
@@ -250,22 +260,20 @@ export default function ProjectManagement({
     setMeetingRawText((prev) => (prev ? prev + "\n\n" + speechText : speechText));
   };
 
-  const currentProject = projects.find((p) => p.id === activeProjectId) || projects[0];
-
-  if (!currentProject) {
+  if (projects.length === 0) {
     return (
       <div className="card p-8 text-center space-y-4">
         <Briefcase className="w-12 h-12 text-mute mx-auto" />
-        <h3 className="font-display font-semibold text-lg">{t('pm.emptyTitle')}</h3>
+        <h3 className="font-display font-semibold text-lg">No Locked Projects Found</h3>
         <p className="text-sm text-mute max-w-md mx-auto">
-          {t('pm.emptyBody')}
+          Project Management tracks processes that have passed Stage 3 (Investment Decision). Lock a process from the catalogue or create a new locked project.
         </p>
         <button
           onClick={() => {
             const newProj: ManagedProject = {
               id: uid('proj'),
-              title: t('pm.defaultProjectTitle'),
-              targetStatement: t('pm.defaultTargetStatement'),
+              title: 'New High-Priority Finance Initiative',
+              targetStatement: 'Automate manual hospital reconciliation workflows to reduce turnaround time.',
               ownerName: profileName,
               ownerEmail: profileEmail,
               stage: '4: Locked Project',
@@ -273,27 +281,48 @@ export default function ProjectManagement({
               targetDate: '2026-12-31',
             };
             onAddProject(newProj);
-            setActiveProjectId(newProj.id);
+            setSelectedProjectId(newProj.id);
           }}
           className="btn-dark"
         >
-          <Plus size={16} /> {t('pm.createLockedProject')}
+          <Plus size={16} /> Create Locked Project
         </button>
       </div>
     );
   }
 
-  // Filter project-specific data
-  const currentTeam = teamMembers.filter((m) => m.projectId === currentProject.id);
-  const currentTranscripts = transcripts.filter((t) => t.projectId === currentProject.id);
-  const currentNotes = meetingNotes.filter((n) => n.projectId === currentProject.id);
-  const currentGantt = ganttTasks.filter((g) => g.projectId === currentProject.id);
-  const currentOkr = projectOkrs.find((o) => o.projectId === currentProject.id);
+  // Projects that involve the current user directly — owner, or a named team member.
+  const isInvolved = (proj: ManagedProject) => {
+    if (proj.ownerName === profileName || (profileEmail && proj.ownerEmail === profileEmail)) return true;
+    return teamMembers.some(
+      (m) => m.projectId === proj.id && (m.name === profileName || (profileEmail && m.email === profileEmail)),
+    );
+  };
+  const myProjects = projects.filter(isInvolved);
+  const hasOtherProjects = myProjects.length < projects.length;
+  const galleryList = galleryScope === 'mine' && myProjects.length > 0 ? myProjects : projects;
+
+  const currentProject = projects.find((p) => p.id === selectedProjectId) || null;
+
+  // Filter project-specific data (only meaningful once a project is selected)
+  const currentTeam = currentProject ? teamMembers.filter((m) => m.projectId === currentProject.id) : [];
+  const currentTranscripts = currentProject ? transcripts.filter((t) => t.projectId === currentProject.id) : [];
+  const currentNotes = currentProject ? meetingNotes.filter((n) => n.projectId === currentProject.id) : [];
+  const currentGantt = currentProject ? ganttTasks.filter((g) => g.projectId === currentProject.id) : [];
+  const currentOkr = currentProject ? projectOkrs.find((o) => o.projectId === currentProject.id) : undefined;
+
+  const SECTION_NAV: Array<{ id: ProjectSectionId; label: string; icon: typeof Users; count?: number }> = [
+    { id: 'team', label: t('pm.sectionTeam'), icon: Users, count: currentTeam.length },
+    { id: 'transcripts', label: t('pm.sectionTranscripts'), icon: FileText, count: currentTranscripts.length },
+    { id: 'assistant', label: t('pm.sectionAssistant'), icon: Sparkles, count: currentNotes.length },
+    { id: 'timeline', label: t('pm.sectionTimeline'), icon: Calendar, count: currentGantt.length },
+    { id: 'okr', label: t('pm.sectionOkr'), icon: Target },
+  ];
 
   // Submit new team member
   const handleAddPersonSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPersonName.trim() || !newPersonEmail.trim()) return;
+    if (!currentProject || !newPersonName.trim() || !newPersonEmail.trim()) return;
 
     const newMember: TeamMember = {
       id: uid('tm'),
@@ -312,7 +341,7 @@ export default function ProjectManagement({
   // Submit transcript ingestion & run AI Meeting Assistant
   const handleIngestTranscript = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!meetingRawText.trim()) return;
+    if (!currentProject || !meetingRawText.trim()) return;
 
     const participants = meetingParticipantsText
       .split(/[,;\n]/)
@@ -323,7 +352,7 @@ export default function ProjectManagement({
       id: uid('tr'),
       projectId: currentProject.id,
       date: meetingDate,
-      title: meetingTitle.trim() || t('pm.defaultMeetingTitle'),
+      title: meetingTitle.trim() || 'Project Coordination Sync',
       participants: participants.length > 0 ? participants : [profileName],
       source: ingestMode,
       rawText: meetingRawText,
@@ -349,7 +378,7 @@ export default function ProjectManagement({
         }),
       });
 
-      if (!resp.ok) throw new Error(t('pm.error.meetingSummary'));
+      if (!resp.ok) throw new Error('Failed to generate AI meeting summary');
       const data = await resp.json();
 
       const draftNote: MeetingNote = {
@@ -379,13 +408,13 @@ export default function ProjectManagement({
         id: uid('mn'),
         projectId: currentProject.id,
         transcriptId: newTranscript.id,
-        summary: t('pm.fallback.summary'),
-        decisions: [t('pm.fallback.decision')],
-        openQuestions: [t('pm.fallback.question')],
+        summary: 'Discussed project milestones and validated system integrations.',
+        decisions: ['Agreed on schedule adjustments for upcoming release.'],
+        openQuestions: ['Confirm backend OAuth scope credentials with IT team.'],
         actionItems: [
           {
             id: uid('ai'),
-            description: t('pm.fallback.action'),
+            description: 'Follow up on API scope authorization',
             assigneeName: profileName,
             assigneeEmail: profileEmail,
             dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
@@ -425,7 +454,7 @@ export default function ProjectManagement({
   // Add new Gantt task
   const handleAddGanttSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGanttLabel.trim()) return;
+    if (!currentProject || !newGanttLabel.trim()) return;
 
     const newTask: GanttTask = {
       id: uid('gt'),
@@ -446,11 +475,11 @@ export default function ProjectManagement({
   const getStageBadge = (stage: ProjectStage) => {
     switch (stage) {
       case '4: Locked Project':
-        return <span className="chip bg-veil border-line text-ink font-semibold">{t('pm.stage4Badge')}</span>;
+        return <span className="chip bg-veil border-line text-ink font-semibold">4: Locked Project</span>;
       case '5: Tracked Execution':
-        return <span className="chip bg-citron-soft border-citron/50 text-citron-deep font-semibold">{t('pm.stage5Badge')}</span>;
+        return <span className="chip bg-citron-soft border-citron/50 text-citron-deep font-semibold">5: Tracked Execution</span>;
       case '6: Realised Benefit':
-        return <span className="chip bg-emerald-100 text-emerald-800 font-semibold border-emerald-200">{t('pm.stage6Badge')}</span>;
+        return <span className="chip bg-emerald-100 text-emerald-800 font-semibold border-emerald-200">6: Realised Benefit</span>;
       default:
         return <span className="chip">{stage}</span>;
     }
@@ -476,7 +505,7 @@ export default function ProjectManagement({
             <button
               onClick={() => setShowAlertsModal(true)}
               className="btn-ghost relative flex items-center gap-2 !py-2 !px-3"
-              title={t('pm.inAppAlertsTitle')}
+              title="View In-App Alerts (L2/L3)"
             >
               <Bell size={16} className="text-ink" />
               <span className="text-xs font-medium">{t('pm.inAppAlerts')}</span>
@@ -497,50 +526,98 @@ export default function ProjectManagement({
         </div>
       </div>
 
-      {/* Horizontal Tab Strip Across Top (One tab per locked project) */}
-      <div className="card p-2.5 flex items-center gap-2 overflow-x-auto scrollbar-none">
-        {projects.map((proj) => {
-          const isActive = proj.id === currentProject.id;
-          return (
-            <div key={proj.id} className="relative group shrink-0">
+      {!currentProject ? (
+        /* Project Gallery — landing page: a gallery of projects to choose from */
+        <div className="space-y-4">
+          {hasOtherProjects && (
+            <div className="flex items-center gap-1 p-1 bg-veil rounded-xl text-xs w-fit">
               <button
-                onClick={() => setActiveProjectId(proj.id)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all whitespace-nowrap cursor-pointer ${
-                  isActive
-                    ? 'bg-ink text-white shadow-lift'
-                    : 'bg-white hover:bg-veil/60 text-ink border border-line'
+                onClick={() => setGalleryScope('mine')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  galleryScope === 'mine' ? 'bg-white shadow-lift text-ink' : 'text-mute'
                 }`}
               >
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold max-w-[200px] truncate">{proj.title}</span>
-                  <span className={`text-[10px] ${isActive ? 'text-citron font-medium' : 'text-mute'}`}>
-                    {getStageBadgeLabel(proj.stage)} · {proj.progressPercent}%
-                  </span>
-                </div>
-                <ChevronRight size={14} className={isActive ? 'text-citron' : 'text-mute'} />
+                {t('pm.myProjects')} ({myProjects.length})
               </button>
-
-              {(isL2orL3 || currentPersona === 'Admin') && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingProject(proj);
-                  }}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-line text-rose-500 items-center justify-center hidden group-hover:flex hover:bg-rose-50 transition-all cursor-pointer shadow-sm z-10"
-                  title={t('pm.eraseProjectTitle')}
-                >
-                  <X size={10} />
-                </button>
-              )}
+              <button
+                onClick={() => setGalleryScope('all')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  galleryScope === 'all' ? 'bg-white shadow-lift text-ink' : 'text-mute'
+                }`}
+              >
+                {t('pm.allProjects')} ({projects.length})
+              </button>
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Main Project Content Grid */}
-      <div className="space-y-6">
-        {/* Section 1: Overview Header */}
-        <div className="card p-6 md:p-8 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {galleryList.map((proj) => {
+              const projTeamCount = teamMembers.filter((m) => m.projectId === proj.id).length;
+              return (
+                <div key={proj.id} className="relative group">
+                  <button
+                    onClick={() => {
+                      setSelectedProjectId(proj.id);
+                      setActiveSection('team');
+                    }}
+                    className="w-full text-left card p-5 space-y-4 hover:border-veil-deep/40 hover:shadow-lift transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      {getStageBadge(proj.stage)}
+                      <span className="text-xs font-bold text-ink">{proj.progressPercent}%</span>
+                    </div>
+                    <div>
+                      <h3 className="font-display font-semibold text-base leading-snug line-clamp-2">{proj.title}</h3>
+                      <p className="text-xs text-mute mt-1 line-clamp-2">{proj.targetStatement}</p>
+                    </div>
+                    <div className="w-full bg-veil h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-citron-deep h-full rounded-full" style={{ width: `${proj.progressPercent}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-line">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar name={proj.ownerName} size={26} />
+                        <span className="text-[11px] text-mute font-medium truncate">{proj.ownerName}</span>
+                      </div>
+                      <span className="text-[10px] text-faint flex items-center gap-1 shrink-0">
+                        <Users size={11} /> {projTeamCount}
+                      </span>
+                    </div>
+                  </button>
+
+                  {(isL2orL3 || currentPersona === 'Admin') && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingProject(proj);
+                      }}
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-line text-rose-500 items-center justify-center hidden group-hover:flex hover:bg-rose-50 transition-all cursor-pointer shadow-sm z-10"
+                      title="Erase Project"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {galleryList.length === 0 && (
+              <div className="col-span-full text-center py-10 text-xs text-mute border border-dashed border-line rounded-2xl">
+                {t('pm.galleryEmpty')} {hasOtherProjects && t('pm.galleryEmptySwitch')}{t('pm.galleryEmptyLock')}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <button
+            onClick={() => setSelectedProjectId(null)}
+            className="btn-ghost !py-1.5 !px-3 text-xs flex items-center gap-1.5 w-fit"
+          >
+            <ArrowLeft size={14} /> {t('pm.backToProjects')}
+          </button>
+
+          {/* Section 1: Overview Header */}
+          <div className="card p-6 md:p-8 space-y-6">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div className="space-y-2 flex-1">
               <div className="flex items-center gap-3 flex-wrap">
@@ -553,7 +630,7 @@ export default function ProjectManagement({
               {currentProject.linkedEngineTitle && (
                 <div className="flex items-center gap-2 text-xs text-mute pt-1">
                   <LinkIcon size={13} className="text-veil-deep" />
-                  <span>{t('pm.linkedEngine')}</span>
+                  <span>Linked Engine:</span>
                   <button
                     onClick={() => onNavigateToCatalogue?.(currentProject.linkedProcessId)}
                     className="font-medium text-ink hover:underline cursor-pointer flex items-center gap-1"
@@ -574,19 +651,19 @@ export default function ProjectManagement({
                     setShowEditOwnerModal(true);
                   }}
                   className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white border border-line text-mute flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-ink hover:border-ink transition-all cursor-pointer shadow-sm"
-                  title={t('pm.assignOwnerTitle')}
+                  title="Assign New Project Owner"
                 >
                   <Edit2 size={12} />
                 </button>
               )}
               <div className="text-right">
-                <span className="text-[11px] font-semibold text-mute block">{t('pm.projectOwner')}</span>
+                <span className="text-[11px] font-semibold text-mute block">PROJECT OWNER</span>
                 <span className="text-xs font-bold text-ink">{currentProject.ownerName}</span>
                 <span className="text-[10px] text-faint block">{currentProject.ownerEmail}</span>
               </div>
 
               <div className="w-full text-right">
-                <label className="text-[10px] font-semibold text-mute block mb-1">{t('pm.changeStage')}</label>
+                <label className="text-[10px] font-semibold text-mute block mb-1">CHANGE STAGE</label>
                 <select
                   value={currentProject.stage}
                   onChange={(e) =>
@@ -597,9 +674,9 @@ export default function ProjectManagement({
                   }
                   className="field !py-1 !px-2 text-xs font-medium cursor-pointer"
                 >
-                  <option value="4: Locked Project">{t('pm.stage4')}</option>
-                  <option value="5: Tracked Execution">{t('pm.stage5')}</option>
-                  <option value="6: Realised Benefit">{t('pm.stage6')}</option>
+                  <option value="4: Locked Project">Stage 4: Locked Project</option>
+                  <option value="5: Tracked Execution">Stage 5: Tracked Execution</option>
+                  <option value="6: Realised Benefit">Stage 6: Realised Benefit</option>
                 </select>
               </div>
             </div>
@@ -608,8 +685,8 @@ export default function ProjectManagement({
           {/* Overall Progress Bar */}
           <div className="space-y-2 pt-2 border-t border-line">
             <div className="flex justify-between items-center text-xs">
-              <span className="font-semibold text-ink">{t('pm.overallProgress')}</span>
-              <span className="font-bold text-ink">{t('pm.percentComplete', { percent: currentProject.progressPercent })}</span>
+              <span className="font-semibold text-ink">Overall Execution Progress</span>
+              <span className="font-bold text-ink">{currentProject.progressPercent}% Complete</span>
             </div>
             <div className="w-full bg-veil h-3 rounded-full overflow-hidden p-0.5 border border-line">
               <div
@@ -618,26 +695,32 @@ export default function ProjectManagement({
               />
             </div>
             <div className="flex justify-between text-[11px] text-faint">
-              <span>{t('pm.targetLaunch', { date: currentProject.targetDate })}</span>
-              <span>{t('pm.stageProgressHint')}</span>
+              <span>Target Launch: {currentProject.targetDate}</span>
+              <span>Stage 4 Lock -&gt; Stage 6 Realisation</span>
             </div>
           </div>
         </div>
 
+        {/* Categorized sections — right-side nav picks which one shows, so the
+            page doesn't have to be scrolled through top to bottom. */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          <div className="lg:col-span-3 space-y-6">
+        {activeSection === 'team' && (
+        <>
         {/* Section 2: Team */}
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users size={18} className="text-ink" />
-              <h3 className="font-display font-semibold text-base">{t('pm.projectTeam')}</h3>
-              <span className="text-xs text-mute font-medium">{t('pm.membersCount', { count: currentTeam.length })}</span>
+              <h3 className="font-display font-semibold text-base">{t('pm.sectionTeam')}</h3>
+              <span className="text-xs text-mute font-medium">({currentTeam.length} members)</span>
             </div>
 
             <button
               onClick={() => setShowAddPersonModal(true)}
               className="btn-ghost !py-1.5 !px-3 text-xs flex items-center gap-1.5"
             >
-              <Plus size={14} /> {t('pm.addPerson')}
+              <Plus size={14} /> Add person
             </button>
           </div>
 
@@ -653,7 +736,7 @@ export default function ProjectManagement({
                     <div className="text-xs font-bold text-ink truncate">{member.name}</div>
                     <div className="text-[10px] text-faint truncate">{member.email}</div>
                     <span className="chip bg-veil/80 border-transparent text-[9px] mt-1">
-                      {getRoleLabel(member.role)}
+                      {member.role}
                     </span>
                   </div>
                 </div>
@@ -662,7 +745,7 @@ export default function ProjectManagement({
                   <button
                     onClick={() => onRemoveTeamMember(member.id)}
                     className="text-faint hover:text-warn p-1 cursor-pointer transition-colors"
-                    title={t('pm.removeMemberTitle')}
+                    title="Remove member"
                   >
                     <X size={14} />
                   </button>
@@ -671,23 +754,27 @@ export default function ProjectManagement({
             ))}
           </div>
         </div>
+        </>
+        )}
 
+        {activeSection === 'transcripts' && (
+        <>
         {/* Section 3: Meeting Transcripts & Ingestion */}
         <div className="card p-6 space-y-5">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <div className="flex items-center gap-2">
                 <FileText size={18} className="text-ink" />
-                <h3 className="font-display font-semibold text-base">{t('pm.transcriptsTitle')}</h3>
+                <h3 className="font-display font-semibold text-base">{t('pm.sectionTranscripts')}</h3>
               </div>
-              <p className="text-xs text-mute mt-0.5">{t('pm.transcriptsSubtitle')}</p>
+              <p className="text-xs text-mute mt-0.5">Ingest raw call notes or transcripts for AI action extraction.</p>
             </div>
 
             <button
               onClick={() => setShowIngestModal(true)}
               className="btn-dark !py-1.5 !px-3.5 text-xs flex items-center gap-1.5"
             >
-              <Upload size={14} /> {t('pm.ingestTranscript')}
+              <Upload size={14} /> Ingest Transcript / Notes
             </button>
           </div>
 
@@ -695,9 +782,9 @@ export default function ProjectManagement({
           <div className="p-4 rounded-2xl bg-citron-soft/50 border border-citron/40 text-xs text-inksoft flex items-start gap-3">
             <Info size={16} className="text-citron-deep shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <span className="font-bold text-ink block">{t('pm.engineeringNoteTitle')}</span>
+              <span className="font-bold text-ink block">💡 Engineering Note for Live Call Capture</span>
               <p className="leading-relaxed text-[11px]">
-                {t('pm.engineeringNoteBody')}
+                Real-time meeting capture (bot joining Zoom/Teams calls or live microphone capture) requires dedicated Speech-to-Text (STT) worker infrastructure and calendar OAuth integration. This pass provides instant file upload (`.txt`, `.docx`, `.pdf`, `.mp3`) and direct text paste ingestion; live call listening is sized for Phase 2.
               </p>
             </div>
           </div>
@@ -705,21 +792,21 @@ export default function ProjectManagement({
           {/* List of ingested transcripts */}
           {currentTranscripts.length === 0 ? (
             <div className="text-center py-6 border border-dashed border-line rounded-2xl text-xs text-mute">
-              {t('pm.noTranscripts')}
+              No meeting transcripts ingested yet. Click &quot;Ingest Transcript / Notes&quot; to submit notes for AI processing.
             </div>
           ) : (
             <div className="space-y-3">
               {currentTranscripts.map((tr) => (
                 <div key={tr.id} className="p-4 rounded-2xl bg-canvas border border-line space-y-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <FileText size={15} className="text-veil-deep" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText size={15} className="text-veil-deep shrink-0" />
                       <span className="text-xs font-bold text-ink">{tr.title}</span>
                       <span className="chip bg-veil text-[10px]">{tr.date}</span>
-                      {tr.fileName && <span className="chip bg-blush text-[10px]">{tr.fileName}</span>}
+                      {tr.fileName && <span className="chip bg-blush text-[10px] max-w-[70vw] truncate">{tr.fileName}</span>}
                     </div>
                     <span className="text-[10px] text-faint">
-                      {t('pm.participants', { names: tr.participants.join(', ') })}
+                      Participants: {tr.participants.join(', ')}
                     </span>
                   </div>
                   <p className="text-xs text-mute line-clamp-2 italic bg-white p-2.5 rounded-xl border border-line/60">
@@ -730,17 +817,21 @@ export default function ProjectManagement({
             </div>
           )}
         </div>
+        </>
+        )}
 
+        {activeSection === 'assistant' && (
+        <>
         {/* Section 4: AI Meeting Assistant */}
         <div className="card p-6 space-y-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles size={18} className="text-citron-deep" />
-              <h3 className="font-display font-semibold text-base">{t('pm.aiAssistantTitle')}</h3>
+              <h3 className="font-display font-semibold text-base">{t('pm.sectionAssistant')}</h3>
             </div>
             {isProcessingAi && (
               <span className="text-xs font-semibold text-citron-deep flex items-center gap-1.5 animate-pulse">
-                <Sparkles size={14} className="animate-spin" /> {t('pm.processingTranscript')}
+                <Sparkles size={14} className="animate-spin" /> Processing transcript with Gemini...
               </span>
             )}
           </div>
@@ -749,13 +840,13 @@ export default function ProjectManagement({
           {reviewNote && (
             <div className="p-5 rounded-2xl bg-citron-soft/30 border-2 border-citron-deep/30 space-y-4 animate-fade-up">
               <div className="flex items-center justify-between">
-                <span className="chip bg-citron text-ink font-bold text-xs">{t('pm.reviewDraftBadge')}</span>
-                <span className="text-xs text-mute">{t('pm.reviewBeforeConfirm')}</span>
+                <span className="chip bg-citron text-ink font-bold text-xs">AI Generated Review Draft</span>
+                <span className="text-xs text-mute">Review and edit before confirming</span>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-ink block mb-1">{t('pm.executiveSummary')}</label>
+                  <label className="text-xs font-bold text-ink block mb-1">Executive Summary</label>
                   <textarea
                     className="field text-xs min-h-16"
                     value={reviewNote.summary}
@@ -765,29 +856,29 @@ export default function ProjectManagement({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-ink block mb-1">{t('pm.decisionsMade')}</label>
+                    <label className="text-xs font-bold text-ink block mb-1">Decisions Made</label>
                     <textarea
                       className="field text-xs min-h-20"
                       value={reviewNote.decisions.join('\n')}
                       onChange={(e) => setReviewNote({ ...reviewNote, decisions: e.target.value.split('\n').filter(Boolean) })}
-                      placeholder={t('pm.onePerLine')}
+                      placeholder="One decision per line"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-ink block mb-1">{t('pm.openQuestions')}</label>
+                    <label className="text-xs font-bold text-ink block mb-1">Open Questions</label>
                     <textarea
                       className="field text-xs min-h-20"
                       value={reviewNote.openQuestions.join('\n')}
                       onChange={(e) => setReviewNote({ ...reviewNote, openQuestions: e.target.value.split('\n').filter(Boolean) })}
-                      placeholder={t('pm.oneQuestionPerLine')}
+                      placeholder="One question per line"
                     />
                   </div>
                 </div>
 
                 {/* Extracted Action Items */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-ink block">{t('pm.extractedActions')}</label>
+                  <label className="text-xs font-bold text-ink block">Extracted Action Items</label>
                   {reviewNote.actionItems.map((item, idx) => (
                     <div key={item.id} className="p-3 bg-white rounded-xl border border-line flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
                       <div className="flex-1 min-w-0">
@@ -840,10 +931,10 @@ export default function ProjectManagement({
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
                 <button onClick={() => setReviewNote(null)} className="btn-ghost text-xs !py-1.5">
-                  {t('pm.discard')}
+                  Discard
                 </button>
                 <button onClick={handleConfirmAndSendNote} className="btn-dark text-xs !py-1.5 flex items-center gap-1.5">
-                  <Send size={13} /> {t('pm.confirmDispatch')}
+                  <Send size={13} /> Confirm &amp; Dispatch Action Items
                 </button>
               </div>
             </div>
@@ -852,14 +943,14 @@ export default function ProjectManagement({
           {/* Finalized Notes & Action Items Display */}
           {currentNotes.length === 0 && !reviewNote ? (
             <div className="text-center py-6 text-xs text-mute border border-line rounded-2xl">
-              {t('pm.noMeetingNotes')}
+              No meeting notes generated yet. Ingest a transcript above to extract structured action items.
             </div>
           ) : (
             <div className="space-y-4">
               {currentNotes.map((note) => (
                 <div key={note.id} className="p-5 rounded-2xl bg-canvas border border-line space-y-4">
                   <div>
-                    <div className="text-xs font-bold text-ink">{t('pm.meetingSummary')}</div>
+                    <div className="text-xs font-bold text-ink">Meeting Summary</div>
                     <p className="text-xs text-inksoft mt-1 leading-relaxed">{note.summary}</p>
                   </div>
 
@@ -867,7 +958,7 @@ export default function ProjectManagement({
                     {note.decisions.length > 0 && (
                       <div className="bg-white p-3 rounded-xl border border-line space-y-1">
                         <span className="font-bold text-ink flex items-center gap-1">
-                          <CheckCircle2 size={13} className="text-emerald-600" /> {t('pm.decisions')}
+                          <CheckCircle2 size={13} className="text-emerald-600" /> Decisions
                         </span>
                         <ul className="list-disc list-inside text-[11px] text-mute space-y-1">
                           {note.decisions.map((d, i) => (
@@ -880,7 +971,7 @@ export default function ProjectManagement({
                     {note.openQuestions.length > 0 && (
                       <div className="bg-white p-3 rounded-xl border border-line space-y-1">
                         <span className="font-bold text-ink flex items-center gap-1">
-                          <Clock size={13} className="text-amber-600" /> {t('pm.openQuestionsLabel')}
+                          <Clock size={13} className="text-amber-600" /> Open Questions
                         </span>
                         <ul className="list-disc list-inside text-[11px] text-mute space-y-1">
                           {note.openQuestions.map((q, i) => (
@@ -893,7 +984,7 @@ export default function ProjectManagement({
 
                   {/* Action items list */}
                   <div className="space-y-2 pt-2 border-t border-line">
-                    <span className="text-xs font-bold text-ink block">{t('pm.actionItemsRouting')}</span>
+                    <span className="text-xs font-bold text-ink block">Action Items &amp; Routing Status</span>
                     <div className="space-y-2">
                       {note.actionItems.map((item) => (
                         <div
@@ -905,7 +996,7 @@ export default function ProjectManagement({
                             <div className="min-w-0">
                               <div className="font-semibold text-ink truncate">{item.description}</div>
                               <div className="text-[10px] text-faint">
-                                {item.assigneeName} ({item.assigneeEmail}) · {t('pm.dueDate', { date: item.dueDate })}
+                                {item.assigneeName} ({item.assigneeEmail}) · Due: {item.dueDate}
                               </div>
                             </div>
                           </div>
@@ -914,7 +1005,7 @@ export default function ProjectManagement({
                           <div className="flex items-center gap-1 shrink-0">
                             {(['pending', 'sent', 'acknowledged'] as const).map((st) => (
                               <button
-                                key={getActionStatusLabel(st)}
+                                key={st}
                                 onClick={() => onUpdateActionItemStatus(note.id, item.id, st)}
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize transition-all cursor-pointer ${
                                   item.status === st
@@ -926,7 +1017,7 @@ export default function ProjectManagement({
                                     : 'text-faint hover:text-ink'
                                 }`}
                               >
-                                {getActionStatusLabel(st)}
+                                {st}
                               </button>
                             ))}
                           </div>
@@ -939,23 +1030,27 @@ export default function ProjectManagement({
             </div>
           )}
         </div>
+        </>
+        )}
 
+        {activeSection === 'timeline' && (
+        <>
         {/* Section 5: Project Timeline (Gantt Chart) */}
         <div className="card p-6 space-y-5">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <Calendar size={18} className="text-ink" />
-                <h3 className="font-display font-semibold text-base">{t('pm.ganttTitle')}</h3>
+                <h3 className="font-display font-semibold text-base">{t('pm.sectionTimeline')}</h3>
               </div>
-              <p className="text-xs text-mute mt-0.5">{t('pm.ganttSubtitle', { date: currentProject.targetDate })}</p>
+              <p className="text-xs text-mute mt-0.5">Execution phases and milestones against target date ({currentProject.targetDate}).</p>
             </div>
 
             <button
               onClick={() => setShowAddGanttModal(true)}
               className="btn-dark !py-1.5 !px-3 text-xs flex items-center gap-1.5"
             >
-              <Plus size={14} /> {t('pm.addPhaseTask')}
+              <Plus size={14} /> Add Phase / Task
             </button>
           </div>
 
@@ -976,10 +1071,10 @@ export default function ProjectManagement({
               <div
                 className="absolute top-0 bottom-0 border-r-2 border-dashed border-warn/70 z-10 flex flex-col justify-start"
                 style={{ left: '72%' }}
-                title={t('pm.targetDateTitle', { date: currentProject.targetDate })}
+                title={`Target Date: ${currentProject.targetDate}`}
               >
                 <span className="text-[9px] font-bold bg-blush text-warn px-1 rounded -translate-x-1/2">
-                  {t('pm.targetLabel', { date: currentProject.targetDate })}
+                  Target: {currentProject.targetDate}
                 </span>
               </div>
 
@@ -990,14 +1085,14 @@ export default function ProjectManagement({
                       <span className="font-bold text-ink">{task.label}</span>
                       {task.owner && (
                         <span className="chip bg-veil text-[10px] text-inksoft font-medium">
-                          {t('pm.leadOwner', { name: task.owner })}
+                          Lead: {task.owner}
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] text-faint">
-                        {t('pm.dateRange', { start: task.startDate, end: task.endDate, progress: task.progress })}
+                        {task.startDate} &rarr; {task.endDate} ({task.progress}% done)
                       </span>
 
                       {/* Details & Output Links Button */}
@@ -1009,10 +1104,10 @@ export default function ProjectManagement({
                           setShowDeliverableModal(true);
                         }}
                         className="btn-ghost !py-1 !px-2 text-[11px] flex items-center gap-1 cursor-pointer hover:bg-citron-soft hover:text-ink transition-colors"
-                        title={t('pm.outputLinkTitle')}
+                        title="View or add output links / folder"
                       >
                         <FolderKanban size={13} className={task.deliverableUrl ? 'text-citron-deep' : 'text-faint'} />
-                        <span>{task.deliverableUrl ? t('pm.outputLinked') : t('pm.detailsLink')}</span>
+                        <span>{task.deliverableUrl ? 'Output Linked' : 'Details / Link'}</span>
                       </button>
 
                       {/* Edit Phase Menu Button */}
@@ -1022,10 +1117,10 @@ export default function ProjectManagement({
                           setShowEditGanttModal(true);
                         }}
                         className="btn-ghost !py-1 !px-2 text-[11px] flex items-center gap-1 cursor-pointer hover:bg-veil transition-colors"
-                        title={t('pm.editPhaseTitle')}
+                        title="Edit phase details & timeline"
                       >
                         <Edit2 size={13} className="text-ink" />
-                        <span>{t('pm.editPhase')}</span>
+                        <span>Edit Phase</span>
                       </button>
                     </div>
                   </div>
@@ -1038,7 +1133,7 @@ export default function ProjectManagement({
                     />
                     <div className="relative z-10 w-full flex justify-between items-center text-[10px]">
                       <span className="font-semibold text-ink truncate">
-                        {task.notes ? task.notes : t('pm.phaseProgress', { progress: task.progress })}
+                        {task.notes ? task.notes : `Phase Progress (${task.progress}%)`}
                       </span>
                       {task.deliverableUrl && (
                         <span className="font-bold text-citron-deep flex items-center gap-1">
@@ -1052,16 +1147,20 @@ export default function ProjectManagement({
             </div>
           </div>
         </div>
+        </>
+        )}
 
+        {activeSection === 'okr' && (
+        <>
         {/* Section 6: Project OKR */}
         <div className="card p-6 space-y-5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Target size={18} className="text-citron-deep" />
-              <h3 className="font-display font-semibold text-base">{t('pm.okrTitle')}</h3>
+              <h3 className="font-display font-semibold text-base">{t('pm.sectionOkr')}</h3>
             </div>
             {currentOkr && (
-              <span className="chip bg-veil border-line text-xs font-semibold">
+              <span className="chip bg-veil border-line text-xs font-semibold max-w-full whitespace-normal text-left">
                 {currentOkr.parentOkrLabel}
               </span>
             )}
@@ -1070,7 +1169,7 @@ export default function ProjectManagement({
           {currentOkr ? (
             <div className="p-5 rounded-2xl bg-canvas border border-line space-y-4">
               <div>
-                <span className="text-[10px] font-bold text-faint uppercase block">{t('pm.objective')}</span>
+                <span className="text-[10px] font-bold text-faint uppercase block">OBJECTIVE</span>
                 <p className="text-sm font-bold text-ink mt-0.5">{currentOkr.objective}</p>
               </div>
 
@@ -1082,7 +1181,7 @@ export default function ProjectManagement({
                       <div>
                         <span className="text-xs font-bold text-ink block">{kr.label}</span>
                         <span className="text-xs text-mute">
-                          {t('pm.currentTarget', { current: kr.current, target: kr.target, unit: kr.unit })}
+                          Current: <strong className="text-ink">{kr.current}</strong> / Target: {kr.target} {kr.unit}
                         </span>
                       </div>
 
@@ -1091,7 +1190,7 @@ export default function ProjectManagement({
                           <div className="bg-citron-deep h-full rounded-full" style={{ width: `${pct}%` }} />
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-faint">
-                          <span>{t('pm.progress')}</span>
+                          <span>Progress</span>
                           <span className="font-bold text-ink">{pct}%</span>
                         </div>
                       </div>
@@ -1112,18 +1211,50 @@ export default function ProjectManagement({
             </div>
           ) : (
             <div className="text-center py-6 text-xs text-mute border border-line rounded-2xl">
-              {t('pm.noOkrs')}
+              No OKRs defined for this project.
             </div>
           )}
         </div>
+        </>
+        )}
+          </div>
+
+          {/* Right-side category navigation */}
+          <div className="lg:col-span-1">
+            <div className="card p-2.5 space-y-1 lg:sticky lg:top-6">
+              {SECTION_NAV.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveSection(s.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                    activeSection === s.id ? 'bg-ink text-white shadow-lift' : 'text-inksoft hover:bg-veil/50'
+                  }`}
+                >
+                  <s.icon size={15} className={activeSection === s.id ? 'text-citron' : 'text-mute'} />
+                  <span className="flex-1">{s.label}</span>
+                  {typeof s.count === 'number' && (
+                    <span
+                      className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${
+                        activeSection === s.id ? 'bg-white/20 text-white' : 'bg-veil text-inksoft'
+                      }`}
+                    >
+                      {s.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+      )}
 
       {/* Add Team Member Modal */}
       {showAddPersonModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
-              <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.addPersonTitle')}</h3>
+              <h3 className="font-display font-semibold text-base text-ink">Add Person to Project Team</h3>
               <button onClick={() => setShowAddPersonModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
               </button>
@@ -1131,11 +1262,11 @@ export default function ProjectManagement({
 
             <form onSubmit={handleAddPersonSubmit} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-ink block mb-1">{t('pm.modal.fullName')}</label>
+                <label className="text-xs font-bold text-ink block mb-1">Full Name</label>
                 <input
                   type="text"
                   required
-                  placeholder={t('pm.modal.fullNamePlaceholder')}
+                  placeholder="e.g. Hendra Wijaya"
                   className="field text-xs"
                   value={newPersonName}
                   onChange={(e) => setNewPersonName(e.target.value)}
@@ -1143,11 +1274,11 @@ export default function ProjectManagement({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-ink block mb-1">{t('pm.modal.email')}</label>
+                <label className="text-xs font-bold text-ink block mb-1">Email Address</label>
                 <input
                   type="email"
                   required
-                  placeholder={t('pm.modal.emailPlaceholder')}
+                  placeholder="e.g. hendra.w@siloamhospitals.com"
                   className="field text-xs"
                   value={newPersonEmail}
                   onChange={(e) => setNewPersonEmail(e.target.value)}
@@ -1155,37 +1286,39 @@ export default function ProjectManagement({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-ink block mb-1">{t('pm.modal.role')}</label>
+                <label className="text-xs font-bold text-ink block mb-1">Role</label>
                 <select
                   className="field text-xs"
                   value={newPersonRole}
                   onChange={(e) => setNewPersonRole(e.target.value as any)}
                 >
-                  <option value="Contributor">{t('pm.role.contributor')}</option>
-                  <option value="Lead">{t('pm.role.lead')}</option>
-                  <option value="Stakeholder">{t('pm.role.stakeholder')}</option>
+                  <option value="Contributor">Contributor</option>
+                  <option value="Lead">Lead</option>
+                  <option value="Stakeholder">Stakeholder</option>
                 </select>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                <button type="button" onClick={() => setShowAddPersonModal(false)} className="btn-ghost text-xs">{t('pm.modal.cancel')}</button>
+                <button type="button" onClick={() => setShowAddPersonModal(false)} className="btn-ghost text-xs">
+                  Cancel
+                </button>
                 <button type="submit" className="btn-dark text-xs">
-                  {t('pm.modal.addMember')}
+                  Add Member
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Ingest Transcript / Call Notes Modal (with Speech-to-Text Microphone) */}
       {showIngestModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
               <div>
-                <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.ingestTitle')}</h3>
-                <p className="text-xs text-mute">{t('pm.modal.ingestSubtitle')}</p>
+                <h3 className="font-display font-semibold text-base text-ink">Ingest Meeting Transcript / Notes</h3>
+                <p className="text-xs text-mute">Paste text, record live mic speech, or upload transcript file.</p>
               </div>
               <button onClick={() => setShowIngestModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
@@ -1200,7 +1333,7 @@ export default function ProjectManagement({
                   ingestMode === 'paste' ? 'bg-white shadow-lift text-ink' : 'text-mute'
                 }`}
               >
-                {t('pm.modal.directPaste')}
+                Direct Paste
               </button>
               <button
                 type="button"
@@ -1210,7 +1343,7 @@ export default function ProjectManagement({
                 }`}
               >
                 <Mic size={13} className={isListening ? 'text-warn animate-pulse' : ''} />
-                {t('pm.modal.liveMic')}
+                Live Mic STT
               </button>
               <button
                 type="button"
@@ -1219,17 +1352,17 @@ export default function ProjectManagement({
                   ingestMode === 'upload' ? 'bg-white shadow-lift text-ink' : 'text-mute'
                 }`}
               >
-                {t('pm.modal.uploadFile')}
+                Upload File
               </button>
             </div>
 
             <form onSubmit={handleIngestTranscript} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.meetingTitle')}</label>
+                <label className="font-bold text-ink block mb-1">Meeting Title</label>
                 <input
                   type="text"
                   required
-                  placeholder={t('pm.modal.meetingTitlePlaceholder')}
+                  placeholder="e.g. Sprint 4 Reconciliation Review"
                   className="field"
                   value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
@@ -1238,7 +1371,7 @@ export default function ProjectManagement({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.date')}</label>
+                  <label className="font-bold text-ink block mb-1">Date</label>
                   <input
                     type="date"
                     required
@@ -1248,10 +1381,10 @@ export default function ProjectManagement({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.participants')}</label>
+                  <label className="font-bold text-ink block mb-1">Participants</label>
                   <input
                     type="text"
-                    placeholder={t('pm.modal.participantsPlaceholder')}
+                    placeholder="Comma separated names"
                     className="field"
                     value={meetingParticipantsText}
                     onChange={(e) => setMeetingParticipantsText(e.target.value)}
@@ -1262,11 +1395,11 @@ export default function ProjectManagement({
               {ingestMode === 'mic' ? (
                 <div className="p-4 rounded-2xl bg-canvas border border-line space-y-3 text-center">
                   <div className="flex items-center justify-between text-xs text-inksoft">
-                    <span className="font-bold">{t('pm.modal.micLabel')}</span>
+                    <span className="font-bold">In-App Speech-to-Text Microphone</span>
                     {isListening && (
                       <span className="chip bg-blush text-warn font-bold text-[10px] animate-pulse flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-warn animate-ping" />
-                        {t('pm.modal.recording', { time: `${Math.floor(micSeconds / 60)}:${(micSeconds % 60).toString().padStart(2, '0')}` })}
+                        Recording [{Math.floor(micSeconds / 60)}:{(micSeconds % 60).toString().padStart(2, '0')}]
                       </span>
                     )}
                   </div>
@@ -1280,19 +1413,19 @@ export default function ProjectManagement({
                   >
                     {isListening ? <MicOff size={22} /> : <Mic size={22} />}
                     <span className="font-bold text-xs">
-                      {isListening ? t('pm.modal.stopRecording') : t('pm.modal.startMic')}
+                      {isListening ? 'Stop Recording' : 'Start Microphone Capture'}
                     </span>
                   </button>
 
                   <p className="text-[11px] text-faint">
                     {isListening
-                      ? t('pm.modal.micActiveHint')
-                      : t('pm.modal.micIdleHint')}
+                      ? 'Speak clearly. Speech is continuously converted to text below in real-time.'
+                      : 'Click button above to capture live speech from your built-in microphone.'}
                   </p>
 
                   <textarea
                     rows={5}
-                    placeholder={t('pm.modal.transcriptPlaceholder')}
+                    placeholder="Transcribed speech will stream here automatically..."
                     className="field text-xs bg-white"
                     value={meetingRawText}
                     onChange={(e) => setMeetingRawText(e.target.value)}
@@ -1300,10 +1433,10 @@ export default function ProjectManagement({
                 </div>
               ) : ingestMode === 'upload' ? (
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.uploadLabel')}</label>
+                  <label className="font-bold text-ink block mb-1">Upload File</label>
                   <div className="border-2 border-dashed border-line rounded-xl p-6 text-center space-y-2">
                     <Upload className="mx-auto text-mute" size={24} />
-                    <p className="text-xs text-mute">{t('pm.modal.uploadHint')}</p>
+                    <p className="text-xs text-mute">Select transcript file (.txt, .docx, .pdf, .mp3)</p>
                     {uploadedFileName && (
                       <span className="chip bg-citron-soft text-citron-deep font-bold text-xs block mx-auto max-w-xs truncate">
                         {uploadedFileName}
@@ -1329,11 +1462,11 @@ export default function ProjectManagement({
                 </div>
               ) : (
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.rawNotes')}</label>
+                  <label className="font-bold text-ink block mb-1">Raw Transcript / Meeting Notes</label>
                   <textarea
                     required
                     rows={6}
-                    placeholder={t('pm.modal.rawNotesPlaceholder')}
+                    placeholder="Paste meeting transcript or notes here... The AI assistant will summarize decisions, open questions, and action items with assignees."
                     className="field"
                     value={meetingRawText}
                     onChange={(e) => setMeetingRawText(e.target.value)}
@@ -1342,22 +1475,24 @@ export default function ProjectManagement({
               )}
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                <button type="button" onClick={() => setShowIngestModal(false)} className="btn-ghost">{t('pm.modal.cancel')}</button>
+                <button type="button" onClick={() => setShowIngestModal(false)} className="btn-ghost">
+                  Cancel
+                </button>
                 <button type="submit" className="btn-dark flex items-center gap-1.5">
-                  <Sparkles size={14} /> {t('pm.modal.processWithAi')}
+                  <Sparkles size={14} /> Process with AI Assistant
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Add Gantt Task Modal */}
       {showAddGanttModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
-              <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.addGanttTitle')}</h3>
+              <h3 className="font-display font-semibold text-base text-ink">Add Phase / Milestone Task</h3>
               <button onClick={() => setShowAddGanttModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
               </button>
@@ -1365,11 +1500,11 @@ export default function ProjectManagement({
 
             <form onSubmit={handleAddGanttSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.phaseLabel')}</label>
+                <label className="font-bold text-ink block mb-1">Phase Label</label>
                 <input
                   type="text"
                   required
-                  placeholder={t('pm.modal.phaseLabelPlaceholder')}
+                  placeholder="e.g. Phase 3: Auto-GL Posting"
                   className="field"
                   value={newGanttLabel}
                   onChange={(e) => setNewGanttLabel(e.target.value)}
@@ -1378,7 +1513,7 @@ export default function ProjectManagement({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.startDate')}</label>
+                  <label className="font-bold text-ink block mb-1">Start Date</label>
                   <input
                     type="date"
                     required
@@ -1388,7 +1523,7 @@ export default function ProjectManagement({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.endDate')}</label>
+                  <label className="font-bold text-ink block mb-1">End Date</label>
                   <input
                     type="date"
                     required
@@ -1400,7 +1535,7 @@ export default function ProjectManagement({
               </div>
 
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.phaseLead')}</label>
+                <label className="font-bold text-ink block mb-1">Phase Lead / Owner</label>
                 <input
                   type="text"
                   className="field"
@@ -1410,22 +1545,24 @@ export default function ProjectManagement({
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                <button type="button" onClick={() => setShowAddGanttModal(false)} className="btn-ghost">{t('pm.modal.cancel')}</button>
+                <button type="button" onClick={() => setShowAddGanttModal(false)} className="btn-ghost">
+                  Cancel
+                </button>
                 <button type="submit" className="btn-dark">
-                  {t('pm.modal.addPhase')}
+                  Add Phase
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Edit Gantt Task Modal */}
       {showEditGanttModal && editingGanttTask && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
-              <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.editGanttTitle')}</h3>
+              <h3 className="font-display font-semibold text-base text-ink">Edit Phase / Gantt Task</h3>
               <button onClick={() => setShowEditGanttModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
               </button>
@@ -1440,7 +1577,7 @@ export default function ProjectManagement({
               className="space-y-3 text-xs"
             >
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.phaseTitle')}</label>
+                <label className="font-bold text-ink block mb-1">Phase Title</label>
                 <input
                   type="text"
                   required
@@ -1452,7 +1589,7 @@ export default function ProjectManagement({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.startDate')}</label>
+                  <label className="font-bold text-ink block mb-1">Start Date</label>
                   <input
                     type="date"
                     required
@@ -1462,7 +1599,7 @@ export default function ProjectManagement({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.endDate')}</label>
+                  <label className="font-bold text-ink block mb-1">End Date</label>
                   <input
                     type="date"
                     required
@@ -1475,7 +1612,7 @@ export default function ProjectManagement({
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="font-bold text-ink block">{t('pm.modal.progressPercentage')}</label>
+                  <label className="font-bold text-ink block">Progress Percentage</label>
                   <span className="font-bold text-citron-deep">{editingGanttTask.progress}%</span>
                 </div>
                 <input
@@ -1491,7 +1628,7 @@ export default function ProjectManagement({
               </div>
 
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.phaseOwner')}</label>
+                <label className="font-bold text-ink block mb-1">Phase Owner</label>
                 <input
                   type="text"
                   className="field"
@@ -1501,10 +1638,10 @@ export default function ProjectManagement({
               </div>
 
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.deliverableUrl')}</label>
+                <label className="font-bold text-ink block mb-1">Working Output / Deliverable Link URL</label>
                 <input
                   type="url"
-                  placeholder={t('pm.modal.deliverableUrlPlaceholder')}
+                  placeholder="https://drive.google.com/drive/folders/... or GitHub / SharePoint link"
                   className="field"
                   value={editingGanttTask.deliverableUrl || ''}
                   onChange={(e) => setEditingGanttTask({ ...editingGanttTask, deliverableUrl: e.target.value })}
@@ -1512,24 +1649,26 @@ export default function ProjectManagement({
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                <button type="button" onClick={() => setShowEditGanttModal(false)} className="btn-ghost">{t('pm.modal.cancel')}</button>
+                <button type="button" onClick={() => setShowEditGanttModal(false)} className="btn-ghost">
+                  Cancel
+                </button>
                 <button type="submit" className="btn-dark">
-                  {t('pm.modal.savePhase')}
+                  Save Phase
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Deliverable Details & Output Links Modal */}
       {showDeliverableModal && selectedGanttTaskForDeliverables && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
               <div className="flex items-center gap-2">
                 <FolderKanban size={18} className="text-citron-deep" />
-                <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.deliverablesTitle')}</h3>
+                <h3 className="font-display font-semibold text-base text-ink">Phase Deliverables &amp; Output Links</h3>
               </div>
               <button onClick={() => setShowDeliverableModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
@@ -1537,20 +1676,20 @@ export default function ProjectManagement({
             </div>
 
             <div className="p-3 bg-canvas rounded-2xl border border-line space-y-1">
-              <span className="text-[10px] font-bold text-faint uppercase block">{t('pm.modal.phaseName')}</span>
+              <span className="text-[10px] font-bold text-faint uppercase block">PHASE NAME</span>
               <div className="text-xs font-bold text-ink">{selectedGanttTaskForDeliverables.label}</div>
               <div className="text-[10px] text-mute">
-                {t('pm.modal.leadProgress', { owner: selectedGanttTaskForDeliverables.owner || t('pm.modal.unassigned'), progress: selectedGanttTaskForDeliverables.progress })}
+                Lead Owner: {selectedGanttTaskForDeliverables.owner || 'Unassigned'} · Progress: {selectedGanttTaskForDeliverables.progress}%
               </div>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.folderUrl')}</label>
+                <label className="font-bold text-ink block mb-1">Working Output / Folder URL</label>
                 <div className="flex gap-2">
                   <input
                     type="url"
-                    placeholder={t('pm.modal.folderUrlPlaceholder')}
+                    placeholder="https://drive.google.com/drive/folders/... or GitHub / SharePoint URL"
                     className="field flex-1"
                     value={deliverableUrlInput}
                     onChange={(e) => setDeliverableUrlInput(e.target.value)}
@@ -1564,10 +1703,10 @@ export default function ProjectManagement({
                         setTimeout(() => setCopiedToast(false), 2000);
                       }}
                       className="btn-ghost !py-1.5 !px-3 flex items-center gap-1 shrink-0 cursor-pointer"
-                      title={t('pm.modal.copyLinkTitle')}
+                      title="Copy link to clipboard"
                     >
                       <Copy size={13} />
-                      <span>{copiedToast ? t('pm.modal.copied') : t('pm.modal.copy')}</span>
+                      <span>{copiedToast ? 'Copied!' : 'Copy'}</span>
                     </button>
                   )}
                 </div>
@@ -1581,16 +1720,16 @@ export default function ProjectManagement({
                     rel="noreferrer"
                     className="btn-ghost !py-1.5 text-xs flex items-center justify-center gap-1.5 w-full text-citron-deep border-citron/40 bg-citron-soft/30 hover:bg-citron-soft"
                   >
-                    <ExternalLink size={14} /> {t('pm.modal.openLink')}
+                    <ExternalLink size={14} /> Open Working Output Link in New Tab
                   </a>
                 </div>
               )}
 
               <div>
-                <label className="font-bold text-ink block mb-1">{t('pm.modal.deliverableNotes')}</label>
+                <label className="font-bold text-ink block mb-1">Deliverable Notes / Context</label>
                 <textarea
                   rows={3}
-                  placeholder={t('pm.modal.deliverableNotesPlaceholder')}
+                  placeholder="Describe working output specs, API endpoint documentation, or Figma prototype notes..."
                   className="field"
                   value={deliverableNotesInput}
                   onChange={(e) => setDeliverableNotesInput(e.target.value)}
@@ -1599,7 +1738,7 @@ export default function ProjectManagement({
 
               <div className="flex justify-end gap-2 pt-2 border-t border-line">
                 <button type="button" onClick={() => setShowDeliverableModal(false)} className="btn-ghost">
-                  {t('pm.modal.close')}
+                  Close
                 </button>
                 <button
                   type="button"
@@ -1614,22 +1753,119 @@ export default function ProjectManagement({
                   }}
                   className="btn-dark"
                 >
-                  {t('pm.modal.saveDeliverable')}
+                  Save Deliverable Details
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
+      )}
+
+      {/* Edit Owner Modal */}
+      {showEditOwnerModal && (
+        <ModalPortal>
+          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <h3 className="font-display font-semibold text-base text-ink">Edit Project Owner</h3>
+              <button onClick={() => setShowEditOwnerModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
+                <X size={16} />
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-mute block mb-1">Owner Name</label>
+                <input
+                  type="text"
+                  value={editingOwnerName}
+                  onChange={(e) => setEditingOwnerName(e.target.value)}
+                  className="field w-full text-xs"
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-mute block mb-1">Owner Email</label>
+                <input
+                  type="email"
+                  value={editingOwnerEmail}
+                  onChange={(e) => setEditingOwnerEmail(e.target.value)}
+                  className="field w-full text-xs"
+                  placeholder="e.g. john@example.com"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowEditOwnerModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (editingOwnerName && editingOwnerEmail) {
+                    onUpdateProject({
+                      ...currentProject,
+                      ownerName: editingOwnerName,
+                      ownerEmail: editingOwnerEmail
+                    });
+                    setShowEditOwnerModal(false);
+                  }
+                }}
+                className="btn-dark"
+                disabled={!editingOwnerName || !editingOwnerEmail}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Delete Project Confirm Modal */}
+      {deletingProject && (
+        <ModalPortal>
+          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 grid place-items-center mx-auto mb-2">
+              <X size={24} />
+            </div>
+            <h3 className="font-display font-semibold text-lg text-ink">Delete Project?</h3>
+            <p className="text-sm text-mute">
+              Are you sure you want to completely delete the project <span className="font-semibold text-ink">"{deletingProject.title}"</span>? This action cannot be undone.
+            </p>
+            
+            <div className="flex justify-center gap-2 pt-4">
+              <button
+                onClick={() => setDeletingProject(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer w-full"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const isOpenInDetail = !!currentProject && deletingProject.id === currentProject.id;
+                  onDeleteProject(deletingProject.id);
+                  if (isOpenInDetail) setSelectedProjectId(null);
+                  setDeletingProject(null);
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer w-full"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Lock New Project Modal (Catalogue Selection Workflow) */}
       {showNewProjectModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
               <div>
-                <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.lockProjectTitle')}</h3>
-                <p className="text-xs text-mute">{t('pm.modal.lockProjectSubtitle')}</p>
+                <h3 className="font-display font-semibold text-base text-ink">Lock New Project (Stage 4)</h3>
+                <p className="text-xs text-mute">Select an Automation or Agentic AI process from the Catalogue to lock.</p>
               </div>
               <button onClick={() => setShowNewProjectModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
                 <X size={16} />
@@ -1640,7 +1876,7 @@ export default function ProjectManagement({
               {/* Filter toggle for catalogue */}
               <div className="flex items-center justify-between gap-2 p-2 bg-canvas rounded-2xl border border-line">
                 <span className="font-bold text-ink flex items-center gap-1.5">
-                  <Filter size={13} className="text-citron-deep" /> {t('pm.modal.catalogueSelection')}
+                  <Filter size={13} className="text-citron-deep" /> Process Catalogue Selection
                 </span>
                 <div className="flex gap-1">
                   <button
@@ -1650,7 +1886,7 @@ export default function ProjectManagement({
                       catalogueFilter === 'automation_ai' ? 'bg-ink text-citron shadow-lift' : 'text-mute hover:text-ink'
                     }`}
                   >
-                    {t('pm.modal.filterAutomationAi')}
+                    Automation &amp; AI
                   </button>
                   <button
                     type="button"
@@ -1659,7 +1895,7 @@ export default function ProjectManagement({
                       catalogueFilter === 'all' ? 'bg-ink text-citron shadow-lift' : 'text-mute hover:text-ink'
                     }`}
                   >
-                    {t('pm.modal.filterAllProcesses')}
+                    All Processes
                   </button>
                 </div>
               </div>
@@ -1681,8 +1917,8 @@ export default function ProjectManagement({
                     className="mt-0.5 accent-ink cursor-pointer"
                   />
                   <div>
-                    <span className="font-bold text-ink block">{t('pm.modal.customInitiative')}</span>
-                    <span className="text-[11px] text-mute">{t('pm.modal.customInitiativeDesc')}</span>
+                    <span className="font-bold text-ink block">Custom Unlinked Initiative</span>
+                    <span className="text-[11px] text-mute">Enter a new custom project title and target outcome without importing from catalogue.</span>
                   </div>
                 </label>
 
@@ -1726,7 +1962,7 @@ export default function ProjectManagement({
                           </span>
                         </div>
                         <p className="text-[11px] text-mute line-clamp-1 mt-0.5">
-                          {proc.problemStatement || proc.aiOpportunity || t('pm.modal.automationCandidate')}
+                          {proc.problemStatement || proc.aiOpportunity || 'Candidate for automation & agentic AI deployment.'}
                         </p>
                       </div>
                     </label>
@@ -1743,7 +1979,7 @@ export default function ProjectManagement({
                   const newProj: ManagedProject = {
                     id: uid('proj'),
                     title: newProjTitle.trim(),
-                    targetStatement: newProjTarget.trim() || t('pm.defaultAutomateWorkflow'),
+                    targetStatement: newProjTarget.trim() || 'Automate manual process workflow.',
                     ownerName: profileName,
                     ownerEmail: profileEmail,
                     stage: '4: Locked Project',
@@ -1785,7 +2021,8 @@ export default function ProjectManagement({
                     });
                   }
 
-                  setActiveProjectId(newProj.id);
+                  setSelectedProjectId(newProj.id);
+                  setActiveSection('team');
                   setShowNewProjectModal(false);
                   setNewProjTitle('');
                   setNewProjTarget('');
@@ -1794,11 +2031,11 @@ export default function ProjectManagement({
                 className="space-y-3 pt-2 border-t border-line"
               >
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.projectTitle')}</label>
+                  <label className="font-bold text-ink block mb-1">Project Title</label>
                   <input
                     type="text"
                     required
-                    placeholder={t('pm.modal.projectTitlePlaceholder')}
+                    placeholder="e.g. AP Vendor Invoice AI Scanner"
                     className="field"
                     value={newProjTitle}
                     onChange={(e) => setNewProjTitle(e.target.value)}
@@ -1806,10 +2043,10 @@ export default function ProjectManagement({
                 </div>
 
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.targetOutcome')}</label>
+                  <label className="font-bold text-ink block mb-1">Target Outcome Statement</label>
                   <textarea
                     rows={2}
-                    placeholder={t('pm.modal.targetOutcomePlaceholder')}
+                    placeholder="Describe target business outcome (e.g. Reduce manual processing time by 80%)"
                     className="field"
                     value={newProjTarget}
                     onChange={(e) => setNewProjTarget(e.target.value)}
@@ -1817,7 +2054,7 @@ export default function ProjectManagement({
                 </div>
 
                 <div>
-                  <label className="font-bold text-ink block mb-1">{t('pm.modal.targetRealisationDate')}</label>
+                  <label className="font-bold text-ink block mb-1">Target Realisation Date</label>
                   <input
                     type="date"
                     required
@@ -1828,27 +2065,29 @@ export default function ProjectManagement({
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-line">
-                  <button type="button" onClick={() => setShowNewProjectModal(false)} className="btn-ghost">{t('pm.modal.cancel')}</button>
+                  <button type="button" onClick={() => setShowNewProjectModal(false)} className="btn-ghost">
+                    Cancel
+                  </button>
                   <button type="submit" className="btn-dark">
-                    {t('pm.modal.importAndLock')}
+                    Import Details &amp; Lock Project
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* In-App Alerts Modal for L2 & L3 Users */}
       {showAlertsModal && isL2orL3 && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalPortal>
           <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-line">
               <div className="flex items-center gap-2">
                 <Bell size={18} className="text-ink" />
-                <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.alertsTitle')}</h3>
+                <h3 className="font-display font-semibold text-base text-ink">In-App Alerts &amp; Notifications</h3>
                 <span className="chip bg-citron-soft text-citron-deep font-bold text-[10px]">
-                  {t('pm.modal.viewBadge', { persona: currentPersona })}
+                  {currentPersona} View
                 </span>
               </div>
               <button onClick={() => setShowAlertsModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
@@ -1857,7 +2096,7 @@ export default function ProjectManagement({
             </div>
 
             {notifications.length === 0 ? (
-              <div className="text-center py-6 text-xs text-mute">{t('pm.modal.noAlerts')}</div>
+              <div className="text-center py-6 text-xs text-mute">No in-app alerts at present.</div>
             ) : (
               <div className="space-y-3 divide-y divide-line">
                 {notifications.map((notif) => (
@@ -1868,7 +2107,7 @@ export default function ProjectManagement({
                           {notif.subject}
                         </div>
                         <div className="text-[10px] text-faint">
-                          {t('pm.modal.fromSender', { name: notif.senderName, timeAgo: timeAgo(notif.timestamp) })}
+                          From: {notif.senderName} · {timeAgo(notif.timestamp)}
                         </div>
                       </div>
 
@@ -1877,7 +2116,7 @@ export default function ProjectManagement({
                           onClick={() => onMarkNotificationRead(notif.id)}
                           className="chip bg-citron text-ink text-[10px] font-bold cursor-pointer"
                         >
-                          {t('pm.modal.markRead')}
+                          Mark Read
                         </button>
                       )}
                     </div>
@@ -1888,99 +2127,7 @@ export default function ProjectManagement({
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Edit Owner Modal */}
-      {showEditOwnerModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-line">
-              <h3 className="font-display font-semibold text-base text-ink">{t('pm.modal.editOwnerTitle')}</h3>
-              <button onClick={() => setShowEditOwnerModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-semibold text-mute block mb-1">{t('pm.modal.ownerName')}</label>
-                <input
-                  type="text"
-                  value={editingOwnerName}
-                  onChange={(e) => setEditingOwnerName(e.target.value)}
-                  className="field w-full text-xs"
-                  placeholder={t('pm.modal.ownerNamePlaceholder')}
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-mute block mb-1">{t('pm.modal.ownerEmail')}</label>
-                <input
-                  type="email"
-                  value={editingOwnerEmail}
-                  onChange={(e) => setEditingOwnerEmail(e.target.value)}
-                  className="field w-full text-xs"
-                  placeholder={t('pm.modal.emailPlaceholder')}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowEditOwnerModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer">{t('pm.modal.cancel')}</button>
-              <button
-                onClick={() => {
-                  if (editingOwnerName && editingOwnerEmail) {
-                    onUpdateProject({
-                      ...currentProject,
-                      ownerName: editingOwnerName,
-                      ownerEmail: editingOwnerEmail,
-                    });
-                    setShowEditOwnerModal(false);
-                  }
-                }}
-                className="btn-dark"
-                disabled={!editingOwnerName || !editingOwnerEmail}
-              >
-                {t('pm.modal.saveChanges')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Project Confirm Modal */}
-      {deletingProject && (
-        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-sm animate-fade-up space-y-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 grid place-items-center mx-auto mb-2">
-              <X size={24} />
-            </div>
-            <h3 className="font-display font-semibold text-lg text-ink">{t('pm.delete.title')}</h3>
-            <p className="text-sm text-mute">
-              {t('pm.delete.body', { title: deletingProject.title })}
-            </p>
-
-            <div className="flex justify-center gap-2 pt-4">
-              <button
-                onClick={() => setDeletingProject(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-mute hover:bg-canvas transition-colors cursor-pointer w-full">{t('pm.delete.cancel')}</button>
-              <button
-                onClick={() => {
-                  const isActive = deletingProject.id === currentProject.id;
-                  onDeleteProject(deletingProject.id);
-                  if (isActive && projects.length > 1) {
-                    const otherProj = projects.find((p) => p.id !== deletingProject.id);
-                    if (otherProj) setActiveProjectId(otherProj.id);
-                  }
-                  setDeletingProject(null);
-                }}
-                className="px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer w-full"
-              >
-                {t('pm.delete.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

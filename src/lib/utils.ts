@@ -115,12 +115,30 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+import type { RiceScore } from '../types';
+
 export function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return 'Working late';
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
+}
+
+/** RICE Score = (Reach × Impact × Confidence) ÷ Effort. */
+export function computeRiceScore(rice: RiceScore): number {
+  if (!rice.effort) return 0;
+  return (rice.reach * rice.impact * (rice.confidence / 100)) / rice.effort;
+}
+
+export function formatRiceImpact(rice: RiceScore): string {
+  if (rice.impactUnit === 'hours_per_month') return `${rice.impact.toLocaleString('id-ID')} hrs/mo`;
+  return `Rp ${rice.impact.toLocaleString('id-ID')}`;
+}
+
+export function formatRiceScoreValue(score: number): string {
+  if (!isFinite(score)) return '0';
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(score);
 }
 
 export function initials(name: string): string {
