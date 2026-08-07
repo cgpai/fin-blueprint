@@ -21,12 +21,10 @@ import { hashPassword } from '../lib/utils';
 import { LanguageToggle, classLabel, useLocale, useT } from '../lib/i18n';
 
 export default function LandingPage({
-  onStart,
   registeredProfiles,
   onLogin,
   sheetsSync = 'off',
 }: {
-  onStart: () => void;
   registeredProfiles: UserProfile[];
   onLogin: (profile: UserProfile) => void;
   sheetsSync?: 'off' | 'loading' | 'ok' | 'error';
@@ -125,10 +123,7 @@ export default function LandingPage({
           </div>
           <div className="flex items-center gap-2">
             <LanguageToggle />
-            <button onClick={onStart} className="btn-dark !py-2 !px-4 text-xs">
-              {t('landing.signUp')}
-            </button>
-            <button onClick={openSignIn} className="btn-ghost !py-2 !px-4 text-xs">
+            <button onClick={openSignIn} className="btn-dark !py-2 !px-4 text-xs">
               {t('landing.signIn')}
             </button>
           </div>
@@ -236,8 +231,8 @@ export default function LandingPage({
             {t('landing.heroBody')}
           </p>
           <div className="mt-9 flex items-center justify-center gap-3">
-            <button onClick={onStart} className="btn-dark !px-7 !py-3.5 text-base">
-              {t('landing.startJourney')} <ArrowRight size={17} />
+            <button onClick={openSignIn} className="btn-dark !px-7 !py-3.5 text-base">
+              {t('landing.signIn')} <ArrowRight size={17} />
             </button>
             <a href="#how" className="btn-ghost !px-7 !py-3.5 text-base">
               {t('landing.learnMore')}
@@ -327,8 +322,8 @@ export default function LandingPage({
       <footer className="max-w-5xl mx-auto px-6 pb-20 pt-4 text-center">
         <h2 className="font-display text-3xl font-semibold tracking-tight">{t('landing.ready')}</h2>
         <p className="text-mute mt-2 text-sm">{t('landing.readySub')}</p>
-        <button onClick={onStart} className="btn-citron !px-7 !py-3.5 text-base mt-6">
-          {t('landing.startNow')} <ArrowRight size={17} />
+        <button onClick={openSignIn} className="btn-citron !px-7 !py-3.5 text-base mt-6">
+          {t('landing.signIn')} <ArrowRight size={17} />
         </button>
         <div className="mt-14 text-xs text-faint">{t('landing.footer')}</div>
       </footer>

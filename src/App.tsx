@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import LandingPage from './components/LandingPage';
-import Onboarding from './components/Onboarding';
 import LockScreen from './components/LockScreen';
 import RemoteLogin from './components/RemoteLogin';
 import CaptureJourney from './components/journey/CaptureJourney';
@@ -233,24 +232,6 @@ export default function App() {
     setProfile(newProfile);
     setCurrentPersona(newProfile.role);
     if (newProfile.role === 'Admin') {
-      setWorkspaceTab('admin');
-      setPhase('workspace');
-    } else {
-      setPhase('journey');
-    }
-  };
-
-  const handleOnboardingComplete = (newProfile: UserProfile) => {
-    const promoted = withNicoleAdmin(newProfile);
-    localStorage.setItem(STORAGE.profile, JSON.stringify(promoted));
-    sessionStorage.setItem(STORAGE.unlocked, 'true');
-    setProfile(promoted);
-    setRegisteredProfiles((prev) => {
-      const key = (promoted.email || promoted.name).trim().toLowerCase();
-      return [...prev.filter((p) => (p.email || p.name).trim().toLowerCase() !== key), promoted];
-    });
-    setCurrentPersona(promoted.role);
-    if (promoted.role === 'Admin') {
       setWorkspaceTab('admin');
       setPhase('workspace');
     } else {
@@ -583,23 +564,12 @@ export default function App() {
     return <RemoteLogin onSignedIn={handleRemoteSignedIn} />;
   }
 
-  if (phase === 'landing') {
+  if (phase === 'landing' || phase === 'onboarding') {
     return (
       <LandingPage
-        onStart={() => setPhase('onboarding')}
         registeredProfiles={registeredProfiles}
         onLogin={handleLandingLogin}
         sheetsSync={sheetsSync}
-      />
-    );
-  }
-
-  if (phase === 'onboarding') {
-    return (
-      <Onboarding
-        onComplete={handleOnboardingComplete}
-        onBack={() => setPhase('landing')}
-        registeredProfiles={registeredProfiles}
       />
     );
   }
@@ -683,7 +653,6 @@ export default function App() {
     ? <RemoteLogin onSignedIn={handleRemoteSignedIn} />
     : (
       <LandingPage
-        onStart={() => setPhase('onboarding')}
         registeredProfiles={registeredProfiles}
         onLogin={handleLandingLogin}
         sheetsSync={sheetsSync}
