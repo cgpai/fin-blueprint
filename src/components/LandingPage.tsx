@@ -154,16 +154,17 @@ export default function LandingPage({
 
             {signInStep === 'email' ? (
               <div className="mt-5">
-                <label className="label" htmlFor="signin-email">{t('common.email')}</label>
+                <label className="label" htmlFor="signin-user">{t('common.username')}</label>
                 <input
-                  id="signin-email"
+                  id="signin-user"
                   className="field"
-                  type="email"
+                  type="text"
+                  autoComplete="username"
                   autoFocus
-                  placeholder={t('landing.emailPlaceholder')}
+                  placeholder={t('landing.usernamePlaceholder')}
                   value={email}
                   onChange={(e) => {
-                    setEmail(e.target.value);
+                    setEmail(e.target.value.trim().toLowerCase());
                     setError('');
                   }}
                   onKeyDown={(e) => {
