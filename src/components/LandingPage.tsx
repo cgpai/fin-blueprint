@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { hashPassword } from '../lib/utils';
+import { hashPassword, profileLoginId } from '../lib/utils';
 import { LanguageToggle, classLabel, useLocale, useT } from '../lib/i18n';
 
 export default function LandingPage({
@@ -83,7 +83,8 @@ export default function LandingPage({
       setError(t('landing.errNotRegistered'));
       return;
     }
-    const found = registeredProfiles.some((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
+    const loginKey = email.trim().toLowerCase();
+    const found = registeredProfiles.some((p) => profileLoginId(p) === loginKey);
     if (!found) {
       setError(t('landing.errNotRegistered'));
       return;
@@ -96,7 +97,8 @@ export default function LandingPage({
     if (!email.trim() || !password || checking) return;
     setChecking(true);
     setError('');
-    const profile = registeredProfiles.find((p) => (p.email || '').toLowerCase() === email.trim().toLowerCase());
+    const loginKey = email.trim().toLowerCase();
+    const profile = registeredProfiles.find((p) => profileLoginId(p) === loginKey);
     const hash = await hashPassword(password);
     if (profile && profile.passwordHash === hash) {
       onLogin(profile);

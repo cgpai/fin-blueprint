@@ -210,15 +210,12 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady, sheetsSync]);
 
-  // Super-admin runs the programme — never the staff capture journey.
-  useEffect(() => {
-    if (profile?.role === 'Admin' && phase === 'journey') {
-      setWorkspaceTab('admin');
-      setPhase('workspace');
-    }
-  }, [profile, phase]);
-
   // ---------- Phase transitions ----------
+  const handleCaptureNew = (keepDraft = false) => {
+    if (!keepDraft) localStorage.removeItem('bp_journey_draft_v2');
+    setPhase('journey');
+  };
+
   const handleRemoteSignedIn = (token: string, user: RemoteUser) => {
     sessionStorage.setItem(STORAGE.remoteToken, token);
     const newProfile: UserProfile = {
@@ -578,7 +575,7 @@ export default function App() {
     return <LockScreen profile={profile} onUnlock={handleUnlock} onStartOver={handleStartOver} />;
   }
 
-  if (phase === 'journey' && profile && profile.role !== 'Admin') {
+  if (phase === 'journey' && profile) {
     return (
       <CaptureJourney
         profile={profile}
@@ -641,7 +638,8 @@ export default function App() {
         onAddGanttTask={handleAddGanttTask}
         onUpdateGanttTask={handleUpdateGanttTask}
         onUpdateOkrKeyResult={handleUpdateOkrKeyResult}
-        onCaptureNew={() => setPhase('journey')}
+        onCaptureNew={handleCaptureNew}
+        registeredProfiles={registeredProfiles}
         onLock={handleLock}
         onImportData={handleImportData}
       />

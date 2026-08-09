@@ -958,14 +958,12 @@ export default function ProcessCatalogue({
           >
             <Download size={13} /> {t('catalogue.exportCsv')}
           </button>
-          {currentPersona !== 'Admin' && (
-            <button
-              onClick={onCreateNew}
-              className="btn-dark flex items-center gap-1.5 !py-2 !px-4 text-xs font-semibold rounded-full cursor-pointer"
-            >
-              <Plus size={13} /> {t('catalogue.captureProcess')}
-            </button>
-          )}
+          <button
+            onClick={() => onCreateNew()}
+            className="btn-dark flex items-center gap-1.5 !py-2 !px-4 text-xs font-semibold rounded-full cursor-pointer"
+          >
+            <Plus size={13} /> {t('catalogue.captureProcess')}
+          </button>
         </div>
       </div>
 
@@ -1015,9 +1013,7 @@ export default function ProcessCatalogue({
             title={t('catalogue.emptyTitle')}
             body={t('catalogue.emptyBody')}
             action={
-              currentPersona !== 'Admin' ? (
-                <button onClick={onCreateNew} className="btn-dark mt-2"><Plus size={15} /> {t('catalogue.emptyAction')}</button>
-              ) : undefined
+              <button onClick={() => onCreateNew()} className="btn-dark mt-2"><Plus size={15} /> {t('catalogue.emptyAction')}</button>
             }
           />
         ) : (

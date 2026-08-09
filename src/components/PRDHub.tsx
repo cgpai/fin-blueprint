@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, FileText, Table, Users, Landmark, Layers, Download, CheckCircle, Receipt, HardDrive, RefreshCw, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Process } from '../types';
@@ -175,6 +175,77 @@ const BASE_ENGINES: EngineRecord[] = [
   }
 ];
 
+const ENGINES_STORAGE_KEY = 'bp_prd_engines_v1';
+
+type StoredDynamicEngine = {
+  id: string;
+  overlappingProcesses: string[];
+};
+
+function buildDynamicEngine(titles: string[], id?: string): EngineRecord {
+  return {
+    id: id || `engine-dynamic-${Date.now()}`,
+    title: 'Custom AI Orchestration Engine',
+    icon: Sparkles,
+    description: 'Auto-compiled orchestration engine derived from recently added organizational processes.',
+    targetAudience: 'Cross-functional Operations',
+    masterUsers: 'Process Owners, Analysts',
+    ecosystemApps: 'Internal API Gateway, Cloud Storage, ERP modules',
+    overlappingProcesses: titles,
+    capexLogic: 'Integration hooks for new custom workflows and AI orchestration logic.',
+    opexLogic: 'Token consumption for generative analysis and cloud automation execution.',
+    metrics: {
+      volume: 'Dynamically scaled based on process usage',
+      effort: 'Est. 40% reduction in manual tracking',
+      annualSavings: formatIDR(toIDR(25000)),
+      payback: '6 Bulan',
+    },
+    specifications: [
+      'Dynamic data ingestion from user-defined inputs.',
+      'LLM-based categorization and decision routing.',
+      'Automated alerting and report generation.',
+    ],
+  };
+}
+
+function loadPersistedEngines(): EngineRecord[] {
+  try {
+    const raw = localStorage.getItem(ENGINES_STORAGE_KEY);
+    if (!raw) return BASE_ENGINES;
+    const stored = JSON.parse(raw) as StoredDynamicEngine[];
+    if (!Array.isArray(stored) || stored.length === 0) return BASE_ENGINES;
+    return [...BASE_ENGINES, ...stored.map((e) => buildDynamicEngine(e.overlappingProcesses, e.id))];
+  } catch {
+    return BASE_ENGINES;
+  }
+}
+
+function persistDynamicEngines(engines: EngineRecord[]) {
+  const dynamic: StoredDynamicEngine[] = engines
+    .filter((e) => isDynamicEngineId(e.id))
+    .map((e) => ({ id: e.id, overlappingProcesses: e.overlappingProcesses }));
+  localStorage.setItem(ENGINES_STORAGE_KEY, JSON.stringify(dynamic));
+}
+
+function syncEnginesFromProcesses(processes: Process[], engines: EngineRecord[]): EngineRecord[] {
+  const mappedTitles = new Set(engines.flatMap((e) => e.overlappingProcesses));
+  const unmapped = processes
+    .map((p) => p.title.trim())
+    .filter((title) => title && !mappedTitles.has(title));
+
+  if (unmapped.length === 0) return engines;
+
+  const lastDynamic = [...engines].reverse().find((e) => isDynamicEngineId(e.id));
+  if (lastDynamic) {
+    return engines.map((e) =>
+      e.id === lastDynamic.id
+        ? { ...e, overlappingProcesses: [...e.overlappingProcesses, ...unmapped] }
+        : e,
+    );
+  }
+  return [...engines, buildDynamicEngine(unmapped)];
+}
+
 interface PRDHubProps {
   processes: Process[];
   isAdmin?: boolean;
@@ -182,57 +253,37 @@ interface PRDHubProps {
 
 export default function PRDHub({ processes, isAdmin }: PRDHubProps) {
   const t = useT();
-  const [engines, setEngines] = useState(BASE_ENGINES);
+  const [engines, setEngines] = useState(loadPersistedEngines);
   const [activeEngine, setActiveEngine] = useState<string>('engine-claims');
   const [activeSubTab, setActiveSubTab] = useState<'prd' | 'pricing'>('prd');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [deletingEngine, setDeletingEngine] = useState<EngineRecord | null>(null);
 
+  useEffect(() => {
+    setEngines((prev) => {
+      const next = syncEnginesFromProcesses(processes, prev);
+      if (next === prev) return prev;
+      persistDynamicEngines(next);
+      return next;
+    });
+  }, [processes]);
+
   const handleRefresh = () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
     setRefreshSuccess(false);
 
-    setTimeout(() => {
-      const mappedProcessTitles = new Set(
-        BASE_ENGINES.flatMap(e => e.overlappingProcesses)
-      );
-      
-      const unmappedProcesses = processes.filter(p => !mappedProcessTitles.has(p.title) && p.title.trim() !== '');
-
-      if (unmappedProcesses.length > 0) {
-        const newEngine: EngineRecord = {
-          id: 'engine-dynamic-' + Date.now(),
-          title: 'Custom AI Orchestration Engine',
-          icon: Sparkles,
-          description: 'Auto-compiled orchestration engine derived from recently added organizational processes.',
-          targetAudience: 'Cross-functional Operations',
-          masterUsers: 'Process Owners, Analysts',
-          ecosystemApps: 'Internal API Gateway, Cloud Storage, ERP modules',
-          overlappingProcesses: unmappedProcesses.map(p => p.title),
-          capexLogic: 'Integration hooks for new custom workflows and AI orchestration logic.',
-          opexLogic: 'Token consumption for generative analysis and cloud automation execution.',
-          metrics: {
-            volume: 'Dynamically scaled based on process usage',
-            effort: 'Est. 40% reduction in manual tracking',
-            annualSavings: formatIDR(toIDR(25000)), 
-            payback: '6 Bulan',
-          },
-          specifications: [
-            'Dynamic data ingestion from user-defined inputs.',
-            'LLM-based categorization and decision routing.',
-            'Automated alerting and report generation.'
-          ]
-        };
-        setEngines([...BASE_ENGINES, newEngine]);
-      } else {
-        setEngines(BASE_ENGINES);
-      }
-
+    window.setTimeout(() => {
+      setEngines((prev) => {
+        const next = syncEnginesFromProcesses(processes, prev);
+        persistDynamicEngines(next);
+        return next;
+      });
       setIsRefreshing(false);
       setRefreshSuccess(true);
-      setTimeout(() => setRefreshSuccess(false), 3000);
-    }, 1200);
+      window.setTimeout(() => setRefreshSuccess(false), 3000);
+    }, 400);
   };
 
   const handleExportPRD = (engineId: string) => {
@@ -564,6 +615,7 @@ Make.com Scheduler: Rp 144.000 / month
                 onClick={() => {
                   const newEngines = engines.filter((e) => e.id !== deletingEngine.id);
                   setEngines(newEngines);
+                  persistDynamicEngines(newEngines);
                   if (newEngines.length > 0) setActiveEngine(newEngines[0]!.id);
                   setDeletingEngine(null);
                 }}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Briefcase,
@@ -13,7 +13,6 @@ import {
   Send,
   Upload,
   Link as LinkIcon,
-  Bell,
   Clock,
   ArrowRight,
   ArrowLeft,
@@ -39,13 +38,13 @@ import {
   GanttTask,
   ProjectOKR,
   Persona,
-  UserNotification,
-  ProjectStage,
   Process,
+  ProjectStage,
+  UserProfile,
 } from '../types';
 import { Avatar } from './ui';
 import { useT } from '../lib/i18n';
-import { uid, timeAgo } from '../lib/utils';
+import { profileLoginId, uid, timeAgo } from '../lib/utils';
 
 /**
  * Renders modal overlays into document.body via a portal. This is required
@@ -76,10 +75,10 @@ export default function ProjectManagement({
   meetingNotes,
   ganttTasks,
   projectOkrs,
-  notifications,
   currentPersona,
   profileName,
   profileEmail,
+  staffDirectory = [],
   onUpdateProject,
   onAddProject,
   onDeleteProject,
@@ -92,8 +91,6 @@ export default function ProjectManagement({
   onAddGanttTask,
   onUpdateGanttTask,
   onUpdateOkrKeyResult,
-  onMarkNotificationRead,
-  onActionNotification,
   onNavigateToCatalogue,
 }: {
   projects: ManagedProject[];
@@ -103,10 +100,10 @@ export default function ProjectManagement({
   meetingNotes: MeetingNote[];
   ganttTasks: GanttTask[];
   projectOkrs: ProjectOKR[];
-  notifications: UserNotification[];
   currentPersona: Persona;
   profileName: string;
   profileEmail: string;
+  staffDirectory?: UserProfile[];
   onUpdateProject: (proj: ManagedProject) => void;
   onAddProject: (proj: ManagedProject) => void;
   onDeleteProject: (projectId: string) => void;
@@ -119,8 +116,6 @@ export default function ProjectManagement({
   onAddGanttTask: (task: GanttTask) => void;
   onUpdateGanttTask: (task: GanttTask) => void;
   onUpdateOkrKeyResult: (okrId: string, krId: string, currentVal: number) => void;
-  onMarkNotificationRead: (id: string) => void;
-  onActionNotification: (id: string, response: string) => void;
   onNavigateToCatalogue?: (processId?: string) => void;
 }) {
   const t = useT();
@@ -134,8 +129,7 @@ export default function ProjectManagement({
 
   // Modals & form state
   const [showAddPersonModal, setShowAddPersonModal] = useState(false);
-  const [newPersonName, setNewPersonName] = useState('');
-  const [newPersonEmail, setNewPersonEmail] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState('');
   const [newPersonRole, setNewPersonRole] = useState<'Lead' | 'Contributor' | 'Stakeholder'>('Contributor');
 
   const [showIngestModal, setShowIngestModal] = useState(false);
@@ -173,10 +167,7 @@ export default function ProjectManagement({
   const [deliverableNotesInput, setDeliverableNotesInput] = useState('');
   const [copiedToast, setCopiedToast] = useState(false);
 
-  // Notifications modal for L2 and L3
-  const [showAlertsModal, setShowAlertsModal] = useState(false);
   const isL2orL3 = currentPersona === 'L2' || currentPersona === 'L3';
-  const unreadAlerts = notifications.filter((n) => n.status === 'Unread');
 
   // Lock New Project modal (Catalogue Import workflow)
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -320,21 +311,38 @@ export default function ProjectManagement({
   ];
 
   // Submit new team member
+  const availableStaff = useMemo(() => {
+    if (!currentProject) return [];
+    const onTeam = new Set(
+      teamMembers
+        .filter((m) => m.projectId === currentProject.id)
+        .flatMap((m) => [m.email.toLowerCase(), m.name.toLowerCase()]),
+    );
+    return staffDirectory
+      .filter((p) => {
+        const id = profileLoginId(p);
+        return !onTeam.has(id) && !onTeam.has(p.name.toLowerCase());
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [staffDirectory, teamMembers, currentProject]);
+
   const handleAddPersonSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProject || !newPersonName.trim() || !newPersonEmail.trim()) return;
+    if (!currentProject || !selectedStaffId) return;
+
+    const person = staffDirectory.find((p) => profileLoginId(p) === selectedStaffId);
+    if (!person) return;
 
     const newMember: TeamMember = {
       id: uid('tm'),
       projectId: currentProject.id,
-      name: newPersonName.trim(),
-      email: newPersonEmail.trim(),
+      name: person.name,
+      email: profileLoginId(person),
       role: newPersonRole,
       addedBy: profileName,
     };
     onAddTeamMember(newMember);
-    setNewPersonName('');
-    setNewPersonEmail('');
+    setSelectedStaffId('');
     setShowAddPersonModal(false);
   };
 
@@ -500,23 +508,6 @@ export default function ProjectManagement({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* L2 & L3 In-App Alerts Toggle Button */}
-          {isL2orL3 && (
-            <button
-              onClick={() => setShowAlertsModal(true)}
-              className="btn-ghost relative flex items-center gap-2 !py-2 !px-3"
-              title="View In-App Alerts (L2/L3)"
-            >
-              <Bell size={16} className="text-ink" />
-              <span className="text-xs font-medium">{t('pm.inAppAlerts')}</span>
-              {unreadAlerts.length > 0 && (
-                <span className="min-w-5 h-5 px-1.5 rounded-full bg-citron text-ink text-[10px] font-bold grid place-items-center">
-                  {unreadAlerts.length}
-                </span>
-              )}
-            </button>
-          )}
-
           <button
             onClick={() => setShowNewProjectModal(true)}
             className="btn-dark !py-2 !px-3.5 text-xs flex items-center gap-1.5"
@@ -717,7 +708,10 @@ export default function ProjectManagement({
             </div>
 
             <button
-              onClick={() => setShowAddPersonModal(true)}
+              onClick={() => {
+                setSelectedStaffId('');
+                setShowAddPersonModal(true);
+              }}
               className="btn-ghost !py-1.5 !px-3 text-xs flex items-center gap-1.5"
             >
               <Plus size={14} /> Add person
@@ -1262,27 +1256,30 @@ export default function ProjectManagement({
 
             <form onSubmit={handleAddPersonSubmit} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-ink block mb-1">Full Name</label>
-                <input
-                  type="text"
+                <label className="text-xs font-bold text-ink block mb-1">Select team member</label>
+                <select
                   required
-                  placeholder="e.g. Hendra Wijaya"
                   className="field text-xs"
-                  value={newPersonName}
-                  onChange={(e) => setNewPersonName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-ink block mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. hendra.w@siloamhospitals.com"
-                  className="field text-xs"
-                  value={newPersonEmail}
-                  onChange={(e) => setNewPersonEmail(e.target.value)}
-                />
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                >
+                  <option value="">Choose from staff directory…</option>
+                  {availableStaff.map((person) => {
+                    const id = profileLoginId(person);
+                    return (
+                      <option key={id} value={id}>
+                        {person.name} ({person.role}) — {id}
+                      </option>
+                    );
+                  })}
+                </select>
+                {availableStaff.length === 0 && (
+                  <p className="text-[10px] text-mute mt-1.5">
+                    {staffDirectory.length === 0
+                      ? 'Staff directory is still loading. Try again in a moment.'
+                      : 'Everyone from the directory is already on this team.'}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1302,7 +1299,7 @@ export default function ProjectManagement({
                 <button type="button" onClick={() => setShowAddPersonModal(false)} className="btn-ghost text-xs">
                   Cancel
                 </button>
-                <button type="submit" className="btn-dark text-xs">
+                <button type="submit" className="btn-dark text-xs" disabled={!selectedStaffId}>
                   Add Member
                 </button>
               </div>
@@ -2074,58 +2071,6 @@ export default function ProjectManagement({
                 </div>
               </form>
             </div>
-          </div>
-        </ModalPortal>
-      )}
-
-      {/* In-App Alerts Modal for L2 & L3 Users */}
-      {showAlertsModal && isL2orL3 && (
-        <ModalPortal>
-          <div ref={(el) => { if (el) el.scrollTop = 0; }} className="relative bg-white border border-line rounded-3xl p-6 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-up space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-line">
-              <div className="flex items-center gap-2">
-                <Bell size={18} className="text-ink" />
-                <h3 className="font-display font-semibold text-base text-ink">In-App Alerts &amp; Notifications</h3>
-                <span className="chip bg-citron-soft text-citron-deep font-bold text-[10px]">
-                  {currentPersona} View
-                </span>
-              </div>
-              <button onClick={() => setShowAlertsModal(false)} className="text-mute hover:text-ink cursor-pointer p-1">
-                <X size={16} />
-              </button>
-            </div>
-
-            {notifications.length === 0 ? (
-              <div className="text-center py-6 text-xs text-mute">No in-app alerts at present.</div>
-            ) : (
-              <div className="space-y-3 divide-y divide-line">
-                {notifications.map((notif) => (
-                  <div key={notif.id} className="pt-3 first:pt-0 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className={`text-xs ${notif.status === 'Unread' ? 'font-bold text-ink' : 'font-medium text-inksoft'}`}>
-                          {notif.subject}
-                        </div>
-                        <div className="text-[10px] text-faint">
-                          From: {notif.senderName} · {timeAgo(notif.timestamp)}
-                        </div>
-                      </div>
-
-                      {notif.status === 'Unread' && (
-                        <button
-                          onClick={() => onMarkNotificationRead(notif.id)}
-                          className="chip bg-citron text-ink text-[10px] font-bold cursor-pointer"
-                        >
-                          Mark Read
-                        </button>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-mute leading-relaxed">{notif.message}</p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </ModalPortal>
       )}

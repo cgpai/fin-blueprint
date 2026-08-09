@@ -23,7 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', labelKey: 'nav.dashboard', shortLabelKey: 'nav.dashboardShort', icon: LayoutDashboard, roles: ['L1', 'L2', 'L3'] },
   { id: 'catalogue', labelKey: 'nav.catalogue', shortLabelKey: 'nav.catalogueShort', icon: BookOpen, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
   { id: 'prd_hub', labelKey: 'nav.prdHub', shortLabelKey: 'nav.prdHubShort', icon: FileText, roles: ['L2', 'Admin'] },
-  { id: 'capture', labelKey: 'nav.capture', shortLabelKey: 'nav.captureShort', icon: PlusCircle, roles: ['L1', 'L2', 'L3', 'L4'] },
+  { id: 'capture', labelKey: 'nav.capture', shortLabelKey: 'nav.captureShort', icon: PlusCircle, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
   { id: 'refinement', labelKey: 'nav.refinement', shortLabelKey: 'nav.refinementShort', icon: Sparkles, roles: ['L1', 'L2', 'L3', 'L4', 'Admin'] },
   { id: 'notifications', labelKey: 'nav.projects', shortLabelKey: 'nav.projectsShort', icon: FolderKanban, roles: ['L2', 'L3', 'L4', 'Admin'] },
   { id: 'admin', labelKey: 'nav.admin', shortLabelKey: 'nav.adminShort', icon: ShieldCheck, roles: ['Admin'] },
@@ -48,8 +48,7 @@ export default function Sidebar({
   const t = useT();
   const items = NAV_ITEMS.filter((item) => item.roles.includes(currentPersona));
 
-  const badgeFor = (itemId: string) =>
-    itemId === 'notifications' && (currentPersona === 'L2' || currentPersona === 'L3') ? unreadNotifications : 0;
+  const badgeFor = (_itemId: string) => 0;
 
   return (
     <>

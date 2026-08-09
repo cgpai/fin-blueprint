@@ -8,7 +8,6 @@ import PRDHub from './PRDHub';
 import DashboardCFO from './DashboardCFO';
 import DashboardManager from './DashboardManager';
 import AdminPanel from './AdminPanel';
-import NotificationCenter from './NotificationCenter';
 import ProjectManagement from './ProjectManagement';
 import LocalDataHub from './LocalDataHub';
 import { Avatar } from './ui';
@@ -70,6 +69,7 @@ export default function Workspace({
   onUpdateGanttTask,
   onUpdateOkrKeyResult,
   onCaptureNew,
+  registeredProfiles = [],
   onLock,
   onImportData,
 }: {
@@ -112,7 +112,8 @@ export default function Workspace({
   onAddGanttTask?: (task: GanttTask) => void;
   onUpdateGanttTask?: (task: GanttTask) => void;
   onUpdateOkrKeyResult?: (okrId: string, krId: string, currentVal: number) => void;
-  onCaptureNew: () => void;
+  onCaptureNew: (keepDraft?: boolean) => void;
+  registeredProfiles?: UserProfile[];
   onLock: () => void;
   onImportData: (
     data: {
@@ -189,10 +190,9 @@ export default function Workspace({
         ],
       }),
     );
-    onCaptureNew();
+    onCaptureNew(true);
   };
 
-  const unreadCount = notifications.filter((n) => n.status === 'Unread').length;
   const myProcessCount = processes.filter((p) => p.ownerName === profile.name).length;
   const avgCompleteness = processes.length
     ? Math.round(processes.reduce((sum, p) => sum + p.completenessScore, 0) / processes.length)
@@ -208,8 +208,8 @@ export default function Workspace({
         }}
         currentPersona={currentPersona}
         setPersona={handlePersonaChange}
-        unreadNotifications={unreadCount}
-        onCaptureNew={onCaptureNew}
+        unreadNotifications={0}
+        onCaptureNew={() => onCaptureNew()}
         onLock={onLock}
         profileRole={profile.role}
       />
@@ -242,11 +242,9 @@ export default function Workspace({
           </div>
 
           <div className="md:col-span-2 flex items-center justify-end gap-3 print:hidden flex-wrap">
-            {currentPersona !== 'Admin' && (
-              <button onClick={onCaptureNew} className="btn-dark">
-                <Plus size={16} /> {t('ws.capture')}
-              </button>
-            )}
+            <button onClick={() => onCaptureNew()} className="btn-dark">
+              <Plus size={16} /> {t('ws.capture')}
+            </button>
             <button
               onClick={() => setShowDataHub(true)}
               className="btn-ghost flex items-center gap-2 !py-2.5 !px-3"
@@ -372,7 +370,7 @@ export default function Workspace({
                 currentPersona={currentPersona}
                 profileName={profile.name}
                 profileRole={profile.role}
-                onCreateNew={onCaptureNew}
+                onCreateNew={() => onCaptureNew()}
                 onSaveProcess={onSaveProcess}
               />
             )}
@@ -403,10 +401,10 @@ export default function Workspace({
                 meetingNotes={meetingNotes}
                 ganttTasks={ganttTasks}
                 projectOkrs={projectOkrs}
-                notifications={notifications}
                 currentPersona={currentPersona}
                 profileName={profile.name}
                 profileEmail={profile.email}
+                staffDirectory={registeredProfiles}
                 onUpdateProject={onUpdateProject || (() => {})}
                 onAddProject={onAddProject || (() => {})}
                 onDeleteProject={onDeleteProject || (() => {})}
@@ -419,8 +417,6 @@ export default function Workspace({
                 onAddGanttTask={onAddGanttTask || (() => {})}
                 onUpdateGanttTask={onUpdateGanttTask || (() => {})}
                 onUpdateOkrKeyResult={onUpdateOkrKeyResult || (() => {})}
-                onMarkNotificationRead={onMarkRead}
-                onActionNotification={onActionNotification}
                 onNavigateToCatalogue={(procId) => {
                   if (procId) {
                     const found = processes.find((p) => p.id === procId);
