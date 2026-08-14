@@ -251,6 +251,50 @@ export default function ProjectManagement({
     setMeetingRawText((prev) => (prev ? prev + "\n\n" + speechText : speechText));
   };
 
+  // Derived project state + hooks MUST stay above any early return — clicking
+  // "Create Locked Project" from the empty state used to remount past this
+  // point and trip Rules of Hooks (blank white screen).
+  const isInvolved = (proj: ManagedProject) => {
+    if (proj.ownerName === profileName || (profileEmail && proj.ownerEmail === profileEmail)) return true;
+    return teamMembers.some(
+      (m) => m.projectId === proj.id && (m.name === profileName || (profileEmail && m.email === profileEmail)),
+    );
+  };
+  const myProjects = projects.filter(isInvolved);
+  const hasOtherProjects = myProjects.length < projects.length;
+  const galleryList = galleryScope === 'mine' && myProjects.length > 0 ? myProjects : projects;
+
+  const currentProject = projects.find((p) => p.id === selectedProjectId) || null;
+
+  const currentTeam = currentProject ? teamMembers.filter((m) => m.projectId === currentProject.id) : [];
+  const currentTranscripts = currentProject ? transcripts.filter((t) => t.projectId === currentProject.id) : [];
+  const currentNotes = currentProject ? meetingNotes.filter((n) => n.projectId === currentProject.id) : [];
+  const currentGantt = currentProject ? ganttTasks.filter((g) => g.projectId === currentProject.id) : [];
+  const currentOkr = currentProject ? projectOkrs.find((o) => o.projectId === currentProject.id) : undefined;
+
+  const SECTION_NAV: Array<{ id: ProjectSectionId; label: string; icon: typeof Users; count?: number }> = [
+    { id: 'team', label: t('pm.sectionTeam'), icon: Users, count: currentTeam.length },
+    { id: 'transcripts', label: t('pm.sectionTranscripts'), icon: FileText, count: currentTranscripts.length },
+    { id: 'assistant', label: t('pm.sectionAssistant'), icon: Sparkles, count: currentNotes.length },
+    { id: 'timeline', label: t('pm.sectionTimeline'), icon: Calendar, count: currentGantt.length },
+    { id: 'okr', label: t('pm.sectionOkr'), icon: Target },
+  ];
+
+  const availableStaff = useMemo(() => {
+    if (!currentProject) return [];
+    const onTeam = new Set(
+      teamMembers
+        .filter((m) => m.projectId === currentProject.id)
+        .flatMap((m) => [m.email.toLowerCase(), m.name.toLowerCase()]),
+    );
+    return staffDirectory
+      .filter((p) => {
+        const id = profileLoginId(p);
+        return !onTeam.has(id) && !onTeam.has(p.name.toLowerCase());
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [staffDirectory, teamMembers, currentProject]);
+
   if (projects.length === 0) {
     return (
       <div className="card p-8 text-center space-y-4">
@@ -281,50 +325,6 @@ export default function ProjectManagement({
       </div>
     );
   }
-
-  // Projects that involve the current user directly — owner, or a named team member.
-  const isInvolved = (proj: ManagedProject) => {
-    if (proj.ownerName === profileName || (profileEmail && proj.ownerEmail === profileEmail)) return true;
-    return teamMembers.some(
-      (m) => m.projectId === proj.id && (m.name === profileName || (profileEmail && m.email === profileEmail)),
-    );
-  };
-  const myProjects = projects.filter(isInvolved);
-  const hasOtherProjects = myProjects.length < projects.length;
-  const galleryList = galleryScope === 'mine' && myProjects.length > 0 ? myProjects : projects;
-
-  const currentProject = projects.find((p) => p.id === selectedProjectId) || null;
-
-  // Filter project-specific data (only meaningful once a project is selected)
-  const currentTeam = currentProject ? teamMembers.filter((m) => m.projectId === currentProject.id) : [];
-  const currentTranscripts = currentProject ? transcripts.filter((t) => t.projectId === currentProject.id) : [];
-  const currentNotes = currentProject ? meetingNotes.filter((n) => n.projectId === currentProject.id) : [];
-  const currentGantt = currentProject ? ganttTasks.filter((g) => g.projectId === currentProject.id) : [];
-  const currentOkr = currentProject ? projectOkrs.find((o) => o.projectId === currentProject.id) : undefined;
-
-  const SECTION_NAV: Array<{ id: ProjectSectionId; label: string; icon: typeof Users; count?: number }> = [
-    { id: 'team', label: t('pm.sectionTeam'), icon: Users, count: currentTeam.length },
-    { id: 'transcripts', label: t('pm.sectionTranscripts'), icon: FileText, count: currentTranscripts.length },
-    { id: 'assistant', label: t('pm.sectionAssistant'), icon: Sparkles, count: currentNotes.length },
-    { id: 'timeline', label: t('pm.sectionTimeline'), icon: Calendar, count: currentGantt.length },
-    { id: 'okr', label: t('pm.sectionOkr'), icon: Target },
-  ];
-
-  // Submit new team member
-  const availableStaff = useMemo(() => {
-    if (!currentProject) return [];
-    const onTeam = new Set(
-      teamMembers
-        .filter((m) => m.projectId === currentProject.id)
-        .flatMap((m) => [m.email.toLowerCase(), m.name.toLowerCase()]),
-    );
-    return staffDirectory
-      .filter((p) => {
-        const id = profileLoginId(p);
-        return !onTeam.has(id) && !onTeam.has(p.name.toLowerCase());
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [staffDirectory, teamMembers, currentProject]);
 
   const handleAddPersonSubmit = (e: React.FormEvent) => {
     e.preventDefault();

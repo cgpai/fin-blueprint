@@ -65,6 +65,8 @@ export interface Process {
   userOverrides?: Record<string, 'agentic-ai' | 'automation' | 'human-in-the-loop'>; // stepId -> classification
   manualRoleOverride?: string; // Dedicated role field for raw manual user input (bypassing AI/validation)
   savedDeploymentPlan?: DeploymentPlan;
+  /** Saved ROI/TCO engine state (see FinanceRoiTcoPanel). */
+  savedRoiTco?: any;
 }
 
 export interface User {

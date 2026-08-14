@@ -140,3 +140,35 @@ export function adminSetRemoteActive(token: string, username: string, active: bo
 export function adminExportRemoteCsv(token: string) {
   return callApi<string>('adminExportCsv', token);
 }
+
+
+/* ---------- PRD Engine Hub records (localStorage persistence) ---------- */
+
+export interface PrdEngineMetrics {
+  volume: string;
+  effort: string;
+  annualSavings: string;
+  payback: string;
+}
+
+export interface PrdEngineRecord {
+  id: string;
+  title: string;
+  iconKey: string;
+  description: string;
+  targetAudience: string;
+  masterUsers: string;
+  ecosystemApps: string;
+  overlappingProcesses: string[];
+  capexLogic: string;
+  opexLogic: string;
+  metrics: PrdEngineMetrics;
+  specifications: string[];
+  isSeed: boolean;
+  createdAt: string;
+}
+
+export interface CatalogueProcessRef {
+  id?: string;
+  title: string;
+}

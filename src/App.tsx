@@ -124,30 +124,59 @@ export default function App() {
 
   useEffect(() => {
     if (!spreadsheetEnabled) return;
-    setSheetsSync('loading');
-    loadSnapshot()
-      .then((remote) => {
-        if (!remote) {
-          setSheetsSync('error');
+    let cancelled = false;
+    const MAX_ATTEMPTS = 3;
+
+    const loadWithRetry = async () => {
+      setSheetsSync('loading');
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        try {
+          const remote = await loadSnapshot();
+          if (cancelled) return;
+          if (!remote) {
+            lastError = new Error('Empty spreadsheet response');
+            if (attempt < MAX_ATTEMPTS) {
+              await new Promise((r) => setTimeout(r, 800 * attempt));
+              continue;
+            }
+            setSheetsSync('error');
+            return;
+          }
+          const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
+          if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
+          if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
+          else if (remotePhase && profile) setPhase(remotePhase);
+          if (remote.processes) setProcesses(remote.processes);
+          if (remote.systems) setAvailableSystems(remote.systems);
+          if (remote.notifications) setNotifications(remote.notifications);
+          if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
+          if (remote.improvementItems) setImprovementItems(remote.improvementItems);
+          if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+          setSheetsSync('ok');
           return;
+        } catch (err) {
+          lastError = err;
+          console.error(`Spreadsheet sync load failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
+          if (attempt < MAX_ATTEMPTS) {
+            await new Promise((r) => setTimeout(r, 800 * attempt));
+          }
         }
-        const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
-        if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
-        if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
-        else if (remotePhase && profile) setPhase(remotePhase);
-        if (remote.processes) setProcesses(remote.processes);
-        if (remote.systems) setAvailableSystems(remote.systems);
-        if (remote.notifications) setNotifications(remote.notifications);
-        if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
-        if (remote.improvementItems) setImprovementItems(remote.improvementItems);
-        if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
-        setSheetsSync('ok');
-      })
-      .catch((err) => {
-        console.error('Spreadsheet sync load failed:', err);
+      }
+      if (!cancelled) {
+        console.error('Spreadsheet sync load exhausted retries:', lastError);
         setSheetsSync('error');
-      })
-      .finally(() => setRemoteReady(true));
+      }
+    };
+
+    loadWithRetry().finally(() => {
+      if (!cancelled) setRemoteReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
