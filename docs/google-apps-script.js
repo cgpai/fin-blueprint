@@ -1,11 +1,70 @@
 const SHEET_NAME = 'state';
 const SPREADSHEET_ID = '1Uj25hLKdkA913mtnLJjcGnQtCOnq8zHrxStdhBOJTdk';
+/** Google Sheets cells cap at 50_000 chars. Chunk large arrays below that. */
+const CELL_SAFE_CHARS = 45000;
+const CHUNKABLE_ARRAY_KEYS = ['processes'];
 
 function sheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
   if (sheet.getLastRow() === 0) sheet.appendRow(['key', 'json', 'updatedAt']);
   return sheet;
+}
+
+function chunkPrefix_(key) {
+  return key + '__chunk__';
+}
+
+/** Split an array into JSON-safe chunks that each fit in one Sheets cell. */
+function chunkArray_(arr) {
+  const items = Array.isArray(arr) ? arr : [];
+  const chunks = [];
+  let current = [];
+  let size = 2; // []
+  items.forEach((item) => {
+    const piece = JSON.stringify(item);
+    const extra = (current.length ? 1 : 0) + piece.length;
+    if (current.length > 0 && size + extra > CELL_SAFE_CHARS) {
+      chunks.push(current);
+      current = [];
+      size = 2;
+    }
+    // Single item larger than a cell: still push alone (better error than silent drop).
+    current.push(item);
+    size += extra;
+  });
+  chunks.push(current);
+  return chunks;
+}
+
+function assembleChunked_(out) {
+  CHUNKABLE_ARRAY_KEYS.forEach((key) => {
+    const prefix = chunkPrefix_(key);
+    const chunkKeys = Object.keys(out)
+      .filter((k) => k === key || k.indexOf(prefix) === 0)
+      .sort();
+    if (chunkKeys.length === 0) return;
+
+    const hasChunks = chunkKeys.some((k) => k.indexOf(prefix) === 0);
+    if (!hasChunks) return;
+
+    const merged = [];
+    chunkKeys.forEach((k) => {
+      const val = out[k];
+      if (Array.isArray(val)) {
+        val.forEach((item) => merged.push(item));
+      }
+      delete out[k];
+    });
+    const byId = {};
+    const noId = [];
+    merged.forEach((item) => {
+      if (item && item.id) byId[item.id] = item;
+      else noId.push(item);
+    });
+    out[key] = Object.keys(byId).map((id) => byId[id]).concat(noId);
+  });
+  return out;
 }
 
 function readState_() {
@@ -22,7 +81,7 @@ function readState_() {
       console.error(`Invalid JSON for key "${key}": ${error.message}`);
     }
   });
-  return out;
+  return assembleChunked_(out);
 }
 
 function byId_(existing, incoming) {
@@ -63,12 +122,39 @@ function writeState_(state) {
   const rowIndexByKey = new Map(existingRows.map(([key], index) => [String(key), index + 2]));
   const updatedAt = new Date().toISOString();
   const newRows = [];
+  const keysWritten = {};
 
-  Object.entries(state).forEach(([key, value]) => {
-    const row = [key, JSON.stringify(value), updatedAt];
+  function writeKey_(key, value) {
+    const json = JSON.stringify(value);
+    if (json.length > 50000) {
+      throw new Error(
+        'Key "' + key + '" is ' + json.length + ' chars (Sheets cell max 50000). Chunking failed.',
+      );
+    }
+    const row = [key, json, updatedAt];
     const existingRow = rowIndexByKey.get(key);
     if (existingRow) sheet.getRange(existingRow, 1, 1, 3).setValues([row]);
     else newRows.push(row);
+    keysWritten[key] = true;
+  }
+
+  Object.entries(state).forEach(([key, value]) => {
+    if (CHUNKABLE_ARRAY_KEYS.indexOf(key) >= 0 && Array.isArray(value)) {
+      const chunks = chunkArray_(value);
+      chunks.forEach((chunk, i) => {
+        const chunkKey = i === 0 ? key : chunkPrefix_(key) + i;
+        writeKey_(chunkKey, chunk);
+      });
+      // Clear obsolete trailing chunks from earlier larger writes.
+      const prefix = chunkPrefix_(key);
+      rowIndexByKey.forEach((_, existingKey) => {
+        if (existingKey.indexOf(prefix) === 0 && !keysWritten[existingKey]) {
+          writeKey_(existingKey, []);
+        }
+      });
+      return;
+    }
+    writeKey_(key, value);
   });
 
   if (newRows.length > 0) {

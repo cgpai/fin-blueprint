@@ -70,6 +70,7 @@ export default function Workspace({
   onUpdateOkrKeyResult,
   onCaptureNew,
   registeredProfiles = [],
+  sheetsSaveHint = null,
   onLock,
   onImportData,
 }: {
@@ -114,6 +115,7 @@ export default function Workspace({
   onUpdateOkrKeyResult?: (okrId: string, krId: string, currentVal: number) => void;
   onCaptureNew: (keepDraft?: boolean) => void;
   registeredProfiles?: UserProfile[];
+  sheetsSaveHint?: string | null;
   onLock: () => void;
   onImportData: (
     data: {
@@ -326,6 +328,12 @@ export default function Workspace({
             </div>
           </div>
         </header>
+
+        {sheetsSaveHint && (
+          <div className="mx-4 sm:mx-6 md:mx-10 mb-0 print:hidden rounded-xl border border-bad/30 bg-bad/10 px-3 py-2 text-xs text-bad">
+            Database sync failed — new captures may disappear after relogin. {sheetsSaveHint}
+          </div>
+        )}
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-10 pt-6 pb-24 sm:pb-6 print:h-auto print:overflow-visible">

@@ -113,6 +113,8 @@ export default function App() {
   const [sheetsSync, setSheetsSync] = useState<'off' | 'loading' | 'ok' | 'error'>(
     spreadsheetEnabled ? 'loading' : 'off',
   );
+  /** Last Sheets write result — surfaced so silent 50k-cell failures are visible. */
+  const [sheetsSaveHint, setSheetsSaveHint] = useState<string | null>(null);
 
   // ---------- Project Management state ----------
   const [managedProjects, setManagedProjects] = useState<ManagedProject[]>(() => loadJSON(STORAGE.projects, [] as ManagedProject[]));
@@ -234,7 +236,13 @@ export default function App() {
       improvementItems,
     };
     const timer = window.setTimeout(() => {
-      saveSnapshot(snapshot).catch((err) => console.error('Spreadsheet sync save failed:', err));
+      saveSnapshot(snapshot)
+        .then(() => setSheetsSaveHint(null))
+        .catch((err) => {
+          console.error('Spreadsheet sync save failed:', err);
+          const msg = err instanceof Error ? err.message : 'Spreadsheet save failed';
+          setSheetsSaveHint(msg);
+        });
     }, 800);
     return () => window.clearTimeout(timer);
   }, [profile, phase, processes, availableSystems, notifications, adminBroadcastLogs, improvementItems, registeredProfiles, remoteReady, sheetsSync]);
@@ -669,6 +677,7 @@ export default function App() {
         onUpdateOkrKeyResult={handleUpdateOkrKeyResult}
         onCaptureNew={handleCaptureNew}
         registeredProfiles={registeredProfiles}
+        sheetsSaveHint={sheetsSaveHint}
         onLock={handleLock}
         onImportData={handleImportData}
       />
