@@ -18,33 +18,14 @@ export interface AppSnapshot {
   improvementItems: ImprovementItem[];
 }
 
-const rawEndpoint = (import.meta.env.VITE_SHEETS_ENDPOINT as string | undefined)?.trim();
-/** Absolute Sheets/Apps Script URL, or same-origin Postgres API path (e.g. `/api/state`). */
-const endpoint =
-  rawEndpoint &&
-  rawEndpoint !== '[SENSITIVE]' &&
-  (/^https?:\/\//i.test(rawEndpoint) || rawEndpoint.startsWith('/'))
-    ? rawEndpoint
-    : undefined;
+/** Same-origin Postgres API (Google Sheets removed). */
+const endpoint = '/api/state';
 
-const stateApiToken = (import.meta.env.VITE_STATE_API_TOKEN as string | undefined)?.trim() || '';
-
-function stateHeaders(extra?: HeadersInit): HeadersInit {
-  const headers: Record<string, string> = {};
-  if (stateApiToken) headers['X-Blueprint-Token'] = stateApiToken;
-  if (extra) Object.assign(headers, extra);
-  return headers;
-}
-
-export const spreadsheetEnabled = Boolean(endpoint);
+export const spreadsheetEnabled = true;
 
 export function getSheetsEndpoint(): string | undefined {
   return endpoint;
 }
-
-/** Stay under Google Sheets' 50_000 char/cell hard limit. */
-const CELL_SAFE_CHARS = 45000;
-const CHUNK_PREFIX = 'processes__chunk__';
 
 function profileKey(profile: UserProfile | null): string | null {
   if (!profile) return null;
@@ -72,94 +53,62 @@ function mergeSnapshots(remote: Partial<AppSnapshot> | null, local: AppSnapshot)
   };
 }
 
-function chunkProcesses(processes: Process[]): Process[][] {
-  const chunks: Process[][] = [];
-  let current: Process[] = [];
-  let size = 2; // []
-  for (const item of processes) {
-    const piece = JSON.stringify(item);
-    const extra = (current.length ? 1 : 0) + piece.length;
-    if (current.length > 0 && size + extra > CELL_SAFE_CHARS) {
-      chunks.push(current);
-      current = [];
-      size = 2;
-    }
-    current.push(item);
-    size += extra;
-  }
-  chunks.push(current.length ? current : []);
-  return chunks;
-}
-
-/** Prefer chunk keys when present — legacy `processes` cell is already over the write limit. */
-export function assembleProcessesFromState(data: Record<string, unknown>): Process[] {
-  const chunkKeys = Object.keys(data)
-    .filter((k) => k.startsWith(CHUNK_PREFIX))
-    .sort((a, b) => {
-      const na = Number(a.slice(CHUNK_PREFIX.length)) || 0;
-      const nb = Number(b.slice(CHUNK_PREFIX.length)) || 0;
-      return na - nb;
-    });
-
-  if (chunkKeys.length > 0) {
-    const merged: Process[] = [];
-    for (const key of chunkKeys) {
-      const val = data[key];
-      if (Array.isArray(val)) merged.push(...(val as Process[]));
-    }
-    return byId([], merged.filter((p) => p && p.id));
-  }
-
-  return Array.isArray(data.processes) ? (data.processes as Process[]) : [];
-}
-
-async function parseSheetsJson(res: Response): Promise<Record<string, unknown>> {
+async function parseStateJson(res: Response): Promise<Record<string, unknown>> {
   const data = (await res.json()) as Record<string, unknown> & { ok?: boolean; error?: string };
+  if (res.status === 401) throw new Error('Unauthorized');
   if (data && data.ok === false) {
-    throw new Error(data.error || 'Spreadsheet request failed');
+    throw new Error(data.error || 'State request failed');
   }
   return data;
 }
 
 export async function loadSnapshot(): Promise<Partial<AppSnapshot> | null> {
-  if (!endpoint) return null;
   const res = await fetch(`${endpoint}?action=getState`, {
     method: 'GET',
-    headers: stateHeaders(),
+    credentials: 'include',
   });
-  if (!res.ok) throw new Error(`Spreadsheet load failed (${res.status})`);
-  const data = await parseSheetsJson(res);
-  const processes = assembleProcessesFromState(data);
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`State load failed (${res.status})`);
+  const data = await parseStateJson(res);
+  const processes = Array.isArray(data.processes) ? (data.processes as Process[]) : [];
   return { ...(data as Partial<AppSnapshot>), processes };
 }
 
-/**
- * Persist snapshot. Processes are written as `processes__chunk__N` cells so we
- * never hit Sheets' 50k/cell cap (the root cause of "capture hilang setelah relogin").
- */
 export async function saveSnapshot(snapshot: AppSnapshot): Promise<void> {
-  if (!endpoint) return;
   const remote = await loadSnapshot().catch(() => null);
   const merged = mergeSnapshots(remote, snapshot);
-  const chunks = chunkProcesses(merged.processes || []);
-
-  // Do not send a monolithic `processes` array — writing that cell already fails.
-  const { processes: _drop, ...rest } = merged;
-  const body: Record<string, unknown> = { ...rest };
-  // Always rewrite a fixed window of chunk slots so stale trailing chunks clear.
-  const MAX_CHUNKS = 20;
-  if (chunks.length > MAX_CHUNKS) {
-    throw new Error(`Process catalogue needs ${chunks.length} chunks (max ${MAX_CHUNKS}). Contact admin.`);
-  }
-  for (let i = 0; i < MAX_CHUNKS; i++) {
-    body[`${CHUNK_PREFIX}${i}`] = chunks[i] || [];
-  }
-
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: stateHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ action: 'saveState', snapshot: body }),
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'saveState', snapshot: merged }),
   });
-  if (!res.ok) throw new Error(`Spreadsheet save failed (${res.status})`);
-  await parseSheetsJson(res);
+  if (!res.ok) throw new Error(`State save failed (${res.status})`);
+  await parseStateJson(res);
+}
+
+export async function loginRequest(username: string, password: string): Promise<UserProfile> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string; profile?: UserProfile };
+  if (!res.ok || !data.ok || !data.profile) {
+    throw new Error(data.error || 'Invalid credentials');
+  }
+  return data.profile;
+}
+
+export async function logoutRequest(): Promise<void> {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+}
+
+export async function meRequest(): Promise<UserProfile | null> {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (res.status === 401) return null;
+  if (!res.ok) return null;
+  const data = (await res.json()) as { ok?: boolean; profile?: UserProfile };
+  return data.ok && data.profile ? data.profile : null;
 }

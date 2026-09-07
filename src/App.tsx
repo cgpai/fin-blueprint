@@ -108,12 +108,10 @@ export default function App() {
   const [adminBroadcastLogs, setAdminBroadcastLogs] = useState<NotificationLog[]>(() => loadJSON('bp_broadcasts_v1', [] as NotificationLog[]));
   const [improvementItems, setImprovementItems] = useState<ImprovementItem[]>(() => loadJSON('bp_improvements_v1', [] as ImprovementItem[]));
   const [registeredProfiles, setRegisteredProfiles] = useState<UserProfile[]>([]);
-  const [remoteReady, setRemoteReady] = useState(!spreadsheetEnabled);
-  /** `loading` while first Sheets fetch runs; `error` if it fails; `ok` once profiles are trusted. */
-  const [sheetsSync, setSheetsSync] = useState<'off' | 'loading' | 'ok' | 'error'>(
-    spreadsheetEnabled ? 'loading' : 'off',
-  );
-  /** Last Sheets write result — surfaced so silent 50k-cell failures are visible. */
+  const [remoteReady, setRemoteReady] = useState(false);
+  /** Remote catalogue sync after session cookie auth. */
+  const [sheetsSync, setSheetsSync] = useState<'off' | 'loading' | 'ok' | 'error'>('loading');
+  /** Last remote write result — surfaced when save fails. */
   const [sheetsSaveHint, setSheetsSaveHint] = useState<string | null>(null);
 
   // ---------- Project Management state ----------
@@ -125,57 +123,55 @@ export default function App() {
   const [projectOkrs, setProjectOkrs] = useState<ProjectOKR[]>(() => loadJSON(STORAGE.projectOkrs, [] as ProjectOKR[]));
 
   useEffect(() => {
-    if (!spreadsheetEnabled) return;
     let cancelled = false;
-    const MAX_ATTEMPTS = 3;
-
-    const loadWithRetry = async () => {
+    const boot = async () => {
       setSheetsSync('loading');
-      let lastError: unknown = null;
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const { meRequest, loadSnapshot } = await import('./lib/spreadsheetDb');
+        const me = await meRequest();
         if (cancelled) return;
-        try {
-          const remote = await loadSnapshot();
-          if (cancelled) return;
-          if (!remote) {
-            lastError = new Error('Empty spreadsheet response');
-            if (attempt < MAX_ATTEMPTS) {
-              await new Promise((r) => setTimeout(r, 800 * attempt));
-              continue;
-            }
-            setSheetsSync('error');
-            return;
-          }
-          const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
-          if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
-          if (profile && sessionStorage.getItem(STORAGE.unlocked) !== 'true') setPhase('locked');
-          else if (remotePhase && profile) setPhase(remotePhase);
-          if (remote.processes) setProcesses(remote.processes);
-          if (remote.systems) setAvailableSystems(remote.systems);
-          if (remote.notifications) setNotifications(remote.notifications);
-          if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
-          if (remote.improvementItems) setImprovementItems(remote.improvementItems);
-          if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+        if (!me) {
+          sessionStorage.removeItem(STORAGE.unlocked);
           setSheetsSync('ok');
+          setRemoteReady(true);
+          if (!isRemoteEnabled()) setPhase('landing');
           return;
-        } catch (err) {
-          lastError = err;
-          console.error(`Spreadsheet sync load failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
-          if (attempt < MAX_ATTEMPTS) {
-            await new Promise((r) => setTimeout(r, 800 * attempt));
-          }
         }
-      }
-      if (!cancelled) {
-        console.error('Spreadsheet sync load exhausted retries:', lastError);
-        setSheetsSync('error');
+        const promoted = withNicoleAdmin(me);
+        localStorage.setItem(STORAGE.profile, JSON.stringify(promoted));
+        sessionStorage.setItem(STORAGE.unlocked, 'true');
+        setProfile(promoted);
+        setCurrentPersona(promoted.role);
+        const remote = await loadSnapshot();
+        if (cancelled) return;
+        if (!remote) {
+          setSheetsSync('error');
+          setRemoteReady(true);
+          return;
+        }
+        const remotePhase = remote.phase === 'journey' || remote.phase === 'workspace' ? remote.phase : null;
+        if (remotePhase) localStorage.setItem(STORAGE.phase, remotePhase);
+        if (remote.processes) setProcesses(remote.processes);
+        if (remote.systems) setAvailableSystems(remote.systems);
+        if (remote.notifications) setNotifications(remote.notifications);
+        if (remote.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
+        if (remote.improvementItems) setImprovementItems(remote.improvementItems);
+        if (remote.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+        if (promoted.role === 'Admin') {
+          setWorkspaceTab('admin');
+          setPhase('workspace');
+        } else if (remotePhase) {
+          setPhase(remotePhase);
+        }
+        setSheetsSync('ok');
+      } catch (err) {
+        console.error('Boot sync failed:', err);
+        if (!cancelled) setSheetsSync('error');
+      } finally {
+        if (!cancelled) setRemoteReady(true);
       }
     };
-
-    loadWithRetry().finally(() => {
-      if (!cancelled) setRemoteReady(true);
-    });
-
+    boot();
     return () => {
       cancelled = true;
     };
@@ -279,6 +275,22 @@ export default function App() {
     sessionStorage.setItem(STORAGE.unlocked, 'true');
     setProfile(promoted);
     setCurrentPersona(promoted.role);
+    // Load catalogue now that session cookie exists
+    void (async () => {
+      try {
+        const remote = await loadSnapshot();
+        if (remote?.processes) setProcesses(remote.processes);
+        if (remote?.systems) setAvailableSystems(remote.systems);
+        if (remote?.notifications) setNotifications(remote.notifications);
+        if (remote?.adminBroadcastLogs) setAdminBroadcastLogs(remote.adminBroadcastLogs);
+        if (remote?.improvementItems) setImprovementItems(remote.improvementItems);
+        if (remote?.profiles) setRegisteredProfiles(Object.values(remote.profiles));
+        setSheetsSync('ok');
+      } catch (err) {
+        console.error('Post-login sync failed:', err);
+        setSheetsSync('error');
+      }
+    })();
     if (promoted.role === 'Admin') {
       setWorkspaceTab('admin');
       setPhase('workspace');
@@ -305,6 +317,7 @@ export default function App() {
   };
 
   const handleStartOver = () => {
+    void import('./lib/spreadsheetDb').then(({ logoutRequest }) => logoutRequest());
     localStorage.removeItem(STORAGE.profile);
     localStorage.removeItem(STORAGE.phase);
     sessionStorage.removeItem(STORAGE.unlocked);

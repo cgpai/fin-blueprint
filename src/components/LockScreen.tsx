@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, LockKeyhole } from 'lucide-react';
 import { UserProfile } from '../types';
-import { hashPassword } from '../lib/utils';
 import { LanguageToggle, useT } from '../lib/i18n';
 import { Avatar } from './ui';
 
@@ -23,10 +22,12 @@ export default function LockScreen({
   const attempt = async () => {
     if (!password || checking) return;
     setChecking(true);
-    const hash = await hashPassword(password);
-    if (hash === profile.passwordHash) {
-      onUnlock();
-    } else {
+    try {
+      const { loginRequest } = await import('../lib/spreadsheetDb');
+      const loginKey = (profile.email || profile.name.replace(/\s+/g, '')).trim().toLowerCase();
+      const updated = await loginRequest(loginKey, password);
+      onUnlock(updated);
+    } catch {
       setError(true);
       setPassword('');
       setChecking(false);

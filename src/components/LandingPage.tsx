@@ -17,7 +17,6 @@ import {
   X,
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { hashPassword, profileLoginId } from '../lib/utils';
 import { LanguageToggle, classLabel, useLocale, useT } from '../lib/i18n';
 
 export default function LandingPage({
@@ -75,17 +74,7 @@ export default function LandingPage({
       setError(t('landing.errLoading'));
       return;
     }
-    if (sheetsSync === 'error') {
-      setError(t('landing.errSync'));
-      return;
-    }
-    if (registeredProfiles.length === 0) {
-      setError(t('landing.errNotRegistered'));
-      return;
-    }
-    const loginKey = email.trim().toLowerCase();
-    const found = registeredProfiles.some((p) => profileLoginId(p) === loginKey);
-    if (!found) {
+    if (!email.trim()) {
       setError(t('landing.errNotRegistered'));
       return;
     }
@@ -97,12 +86,11 @@ export default function LandingPage({
     if (!email.trim() || !password || checking) return;
     setChecking(true);
     setError('');
-    const loginKey = email.trim().toLowerCase();
-    const profile = registeredProfiles.find((p) => profileLoginId(p) === loginKey);
-    const hash = await hashPassword(password);
-    if (profile && profile.passwordHash === hash) {
+    try {
+      const { loginRequest } = await import('../lib/spreadsheetDb');
+      const profile = await loginRequest(email.trim().toLowerCase(), password);
       onLogin(profile);
-    } else {
+    } catch {
       setError(t('landing.errMismatch'));
     }
     setChecking(false);
