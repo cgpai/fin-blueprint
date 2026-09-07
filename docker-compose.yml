@@ -1,13 +1,14 @@
-version: '3.8'
+# fin-blueprint on CGP VPS — beside cgp-cgolangp
+# DB: shared postgres-core (database fin_blueprint), reached via host network → 127.0.0.1:5432
 services:
   app:
     build: .
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./:/usr/src/app:cached
-      - /usr/src/app/node_modules
+    container_name: fin-blueprint
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
-    command: npm run dev
-    tty: true
+      NODE_ENV: production
+      PORT: '3020'
+      VITE_SHEETS_ENDPOINT: /api/state

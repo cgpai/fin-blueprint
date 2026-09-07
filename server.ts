@@ -9,7 +9,7 @@ dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 // FAST tier: narrative extraction/structuring — high volume, low judgment required.
 const GEMINI_MODEL_FAST = process.env.GEMINI_MODEL_FAST || 'gemini-3.6-flash';
@@ -43,7 +43,8 @@ const LINES_OF_WORK = [
   'Profitablity and Productivity',
 ];
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.text({ type: 'text/plain', limit: '5mb' }));
 
 // Initialize Gemini Client Lazily and Safely
 let aiClient: GoogleGenAI | null = null;
@@ -1100,6 +1101,64 @@ app.post('/api/blueprint', async (req, res) => {
     res.json({ ok: true, data });
   } catch (err) {
     res.json({ ok: false, error: err instanceof Error ? err.message : 'Request failed.' });
+  }
+});
+
+/** Shared catalogue store (replaces Google Sheets getState/saveState). */
+function parseStateBody(req: { body?: unknown }): Record<string, unknown> {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) && typeof req.body !== 'string') {
+    return req.body as Record<string, unknown>;
+  }
+  if (typeof req.body === 'string' && req.body.trim()) {
+    return JSON.parse(req.body) as Record<string, unknown>;
+  }
+  return {};
+}
+
+app.get('/api/state', async (req, res) => {
+  try {
+    const { getState, pgStateConfigured } = await import('./server/pgState');
+    if (!pgStateConfigured()) {
+      res.status(503).json({ ok: false, error: 'DATABASE_URL not configured' });
+      return;
+    }
+    const action = String(req.query.action || 'getState');
+    if (action !== 'getState') {
+      res.status(400).json({ ok: false, error: `Unknown action: ${action}` });
+      return;
+    }
+    res.json(await getState());
+  } catch (err) {
+    console.error('GET /api/state failed:', err);
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'State load failed' });
+  }
+});
+
+app.post('/api/state', async (req, res) => {
+  try {
+    const { getState, saveState, pgStateConfigured } = await import('./server/pgState');
+    if (!pgStateConfigured()) {
+      res.status(503).json({ ok: false, error: 'DATABASE_URL not configured' });
+      return;
+    }
+    const body = parseStateBody(req);
+    const action = String(body.action || req.query.action || '');
+    if (action === 'getState') {
+      res.json(await getState());
+      return;
+    }
+    if (action === 'saveState') {
+      const snapshot = (body.snapshot && typeof body.snapshot === 'object'
+        ? body.snapshot
+        : body) as Record<string, unknown>;
+      delete snapshot.action;
+      res.json(await saveState(snapshot));
+      return;
+    }
+    res.status(400).json({ ok: false, error: `Unknown action: ${action || '(none)'}` });
+  } catch (err) {
+    console.error('POST /api/state failed:', err);
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'State save failed' });
   }
 });
 

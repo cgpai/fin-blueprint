@@ -15,3 +15,6 @@ server.js
 server.cjs
 .cursor/
 .vercel/
+
+# local DB dumps / secrets
+deploy/local/

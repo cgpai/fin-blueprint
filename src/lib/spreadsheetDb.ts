@@ -19,11 +19,11 @@ export interface AppSnapshot {
 }
 
 const rawEndpoint = (import.meta.env.VITE_SHEETS_ENDPOINT as string | undefined)?.trim();
-/** Reject redacted/placeholder values (e.g. Vercel "sensitive" env pulled as `[SENSITIVE]`). */
+/** Absolute Sheets/Apps Script URL, or same-origin Postgres API path (e.g. `/api/state`). */
 const endpoint =
   rawEndpoint &&
   rawEndpoint !== '[SENSITIVE]' &&
-  /^https?:\/\//i.test(rawEndpoint)
+  (/^https?:\/\//i.test(rawEndpoint) || rawEndpoint.startsWith('/'))
     ? rawEndpoint
     : undefined;
 
@@ -145,7 +145,7 @@ export async function saveSnapshot(snapshot: AppSnapshot): Promise<void> {
 
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'saveState', snapshot: body }),
   });
   if (!res.ok) throw new Error(`Spreadsheet save failed (${res.status})`);
