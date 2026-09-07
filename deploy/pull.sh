@@ -5,5 +5,13 @@ cd "$(dirname "$0")/.."
 git pull --ff-only origin main
 docker compose up -d --build
 docker compose ps
-curl -sf "http://127.0.0.1:${PORT:-3020}/api/state?action=getState" \
-  | python3 -c "import sys,json;d=json.load(sys.stdin);assert d.get('ok') is not False;print('ok processes',len(d.get('processes')or[]),'profiles',len(d.get('profiles')or{}))"
+# wait for app listen
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -sf "http://127.0.0.1:${PORT:-3020}/api/state?action=getState" >/tmp/fin-bp-state.json; then
+    python3 -c "import json;d=json.load(open('/tmp/fin-bp-state.json'));assert d.get('ok') is not False;print('ok processes',len(d.get('processes')or[]),'profiles',len(d.get('profiles')or{}))"
+    exit 0
+  fi
+  sleep 2
+done
+echo 'health check failed' >&2
+exit 1
