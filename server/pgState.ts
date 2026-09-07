@@ -65,24 +65,30 @@ export async function getState(): Promise<Record<string, unknown>> {
 }
 
 export async function saveState(snapshot: Record<string, unknown>): Promise<{ ok: true }> {
-  const processes = assembleProcesses(snapshot);
-  const next: Record<string, unknown> = { ...snapshot, processes };
+  const next: Record<string, unknown> = { ...snapshot };
+  const hasChunks = Object.keys(next).some((k) => k.startsWith(CHUNK_PREFIX));
+  if (hasChunks || 'processes' in next) {
+    next.processes = assembleProcesses(next);
+  }
   for (const key of Object.keys(next)) {
-    if (key.startsWith(CHUNK_PREFIX)) delete next[key];
+    if (key.startsWith(CHUNK_PREFIX) || key === 'action' || key === 'ok') delete next[key];
+  }
+
+  const keys = SNAPSHOT_KEYS.filter((key) => key in next);
+  if (keys.length === 0) {
+    throw new Error('saveState: no snapshot keys provided');
   }
 
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');
-    for (const key of SNAPSHOT_KEYS) {
-      const value = key in next ? next[key] : key === 'processes' ? [] : key === 'profiles' ? {} : null;
+    for (const key of keys) {
       await client.query(
         `INSERT INTO state(key, value, updated_at) VALUES ($1, $2::jsonb, now())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-        [key, JSON.stringify(value ?? null)],
+        [key, JSON.stringify(next[key] ?? null)],
       );
     }
-    // Drop legacy chunk rows if any leaked in from older imports
     await client.query(`DELETE FROM state WHERE key LIKE $1`, [`${CHUNK_PREFIX}%`]);
     await client.query('COMMIT');
   } catch (err) {

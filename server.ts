@@ -10,6 +10,9 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const BIND_HOST = process.env.BIND_HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
+/** Shared gate for /api/state — set STATE_API_TOKEN in server env; clients send X-Blueprint-Token. */
+const STATE_API_TOKEN = (process.env.STATE_API_TOKEN || '').trim();
 
 // FAST tier: narrative extraction/structuring — high volume, low judgment required.
 const GEMINI_MODEL_FAST = process.env.GEMINI_MODEL_FAST || 'gemini-3.6-flash';
@@ -1104,6 +1107,23 @@ app.post('/api/blueprint', async (req, res) => {
   }
 });
 
+function requireStateToken(req: { headers: Record<string, unknown> }, res: { status: (n: number) => { json: (b: unknown) => void } }): boolean {
+  if (!STATE_API_TOKEN) {
+    // Fail closed in production if token missing.
+    if (process.env.NODE_ENV === 'production') {
+      res.status(503).json({ ok: false, error: 'STATE_API_TOKEN not configured' });
+      return false;
+    }
+    return true;
+  }
+  const got = String(req.headers['x-blueprint-token'] || '');
+  if (got !== STATE_API_TOKEN) {
+    res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
 /** Shared catalogue store (replaces Google Sheets getState/saveState). */
 function parseStateBody(req: { body?: unknown }): Record<string, unknown> {
   if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) && typeof req.body !== 'string') {
@@ -1117,6 +1137,7 @@ function parseStateBody(req: { body?: unknown }): Record<string, unknown> {
 
 app.get('/api/state', async (req, res) => {
   try {
+    if (!requireStateToken(req, res)) return;
     const { getState, pgStateConfigured } = await import('./server/pgState');
     if (!pgStateConfigured()) {
       res.status(503).json({ ok: false, error: 'DATABASE_URL not configured' });
@@ -1136,6 +1157,7 @@ app.get('/api/state', async (req, res) => {
 
 app.post('/api/state', async (req, res) => {
   try {
+    if (!requireStateToken(req, res)) return;
     const { getState, saveState, pgStateConfigured } = await import('./server/pgState');
     if (!pgStateConfigured()) {
       res.status(503).json({ ok: false, error: 'DATABASE_URL not configured' });
@@ -1181,8 +1203,8 @@ async function startServer() {
     console.log('Serving production static files from dist/');
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Blueprint server running on http://localhost:${PORT}`);
+  app.listen(PORT, BIND_HOST, () => {
+    console.log(`Blueprint server running on http://${BIND_HOST}:${PORT}`);
   });
 }
 

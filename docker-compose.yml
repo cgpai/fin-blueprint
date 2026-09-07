@@ -2,7 +2,11 @@
 # DB: shared postgres-core (database fin_blueprint), reached via host network → 127.0.0.1:5432
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_SHEETS_ENDPOINT: /api/state
+        VITE_STATE_API_TOKEN: ${STATE_API_TOKEN}
     container_name: fin-blueprint
     restart: unless-stopped
     network_mode: host
@@ -11,4 +15,5 @@ services:
     environment:
       NODE_ENV: production
       PORT: '3020'
-      VITE_SHEETS_ENDPOINT: /api/state
+      BIND_HOST: '127.0.0.1'
+      STATE_API_TOKEN: ${STATE_API_TOKEN}

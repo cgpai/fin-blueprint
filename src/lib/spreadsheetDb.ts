@@ -27,6 +27,15 @@ const endpoint =
     ? rawEndpoint
     : undefined;
 
+const stateApiToken = (import.meta.env.VITE_STATE_API_TOKEN as string | undefined)?.trim() || '';
+
+function stateHeaders(extra?: HeadersInit): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (stateApiToken) headers['X-Blueprint-Token'] = stateApiToken;
+  if (extra) Object.assign(headers, extra);
+  return headers;
+}
+
 export const spreadsheetEnabled = Boolean(endpoint);
 
 export function getSheetsEndpoint(): string | undefined {
@@ -114,7 +123,10 @@ async function parseSheetsJson(res: Response): Promise<Record<string, unknown>> 
 
 export async function loadSnapshot(): Promise<Partial<AppSnapshot> | null> {
   if (!endpoint) return null;
-  const res = await fetch(`${endpoint}?action=getState`, { method: 'GET' });
+  const res = await fetch(`${endpoint}?action=getState`, {
+    method: 'GET',
+    headers: stateHeaders(),
+  });
   if (!res.ok) throw new Error(`Spreadsheet load failed (${res.status})`);
   const data = await parseSheetsJson(res);
   const processes = assembleProcessesFromState(data);
@@ -145,7 +157,7 @@ export async function saveSnapshot(snapshot: AppSnapshot): Promise<void> {
 
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: stateHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ action: 'saveState', snapshot: body }),
   });
   if (!res.ok) throw new Error(`Spreadsheet save failed (${res.status})`);
